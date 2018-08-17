@@ -1,0 +1,33 @@
+{% extends '_base.html' %}
+
+{% block title %}Homepage{% endblock %}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Github & Trello Powerup</h1>
+
+    <p class="govuk-body">Use this service to:</p>
+
+    <ul class="govuk-list govuk-list--bullet">
+      <li>require product signoff before code is merged</li>
+      <li>show pull requests on Trello tickets</li>
+    </ul>
+
+    <p class="govuk-body">Setting up the powerup takes around 5 minutes.</p>
+
+    <h2 class="govuk-heading-m">Before you start</h2>
+
+    <p class="govuk-body">You will need to be signed in to the following services:</p>
+    
+    <ul class="govuk-list govuk-list--bullet">
+      <li><a href="https://www.github.com" target="_blank">GitHub</a>, with admin permissions to your team's repositories</li>
+      <li><a href="https://www.trello.com" target="_blank">Trello</a>, with admin permissions on your team's boards</li>
+    </ul>
+
+    <a href="{{ url_for('.login') }}" role="button" class="govuk-button govuk-button--start govuk-!-margin-top-2 govuk-!-margin-bottom-8">
+      Start now
+    </a>
+  </div>
+</div>
+{% endblock %}

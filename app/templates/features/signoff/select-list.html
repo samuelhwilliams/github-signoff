@@ -1,0 +1,19 @@
+{% extends '_base.html' %}
+
+{% block title %}Choose Trello list{% endblock %}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Choose Trello list</h1>
+
+    <p class="govuk-body">Select the list that you use to indicate that stories your team work on have been reviewed and accepted by a product manager.</p>
+    
+    <form method="POST" data-module="disable-on-submit">
+      {{ list_form.csrf_token }}
+      {{ list_form.list_choice }}
+      <input class="govuk-button govuk-!-margin-top-6" type="submit" value="Continue">
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends '_base.html' %}
+{% import 'macros/design_system.html' as design_system %}
+{% block title %}Delete your account{% endblock%}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Delete your account</h1>
+    <div class="govuk-body">
+      If you are no longer using this powerup, you can delete your account. This will delete any active authorization tokens and your connected repositories will no longer be monitored or updated.
+    </div>
+    
+    {{ design_system.warning_text(text="This action cannot be undone. All of your data will be immediately and irrevocably removed.") }}
+    
+    <form method="POST" action="{{ url_for('.delete_account') }}" data-module="disable-on-submit disable-permanently">
+      {{ delete_account_form.csrf_token }}
+      <input class="app-button-danger" type="submit" value="Permanently delete account">
+    </form>
+  </div>
+</div>
+{% endblock %}

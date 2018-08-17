@@ -1,0 +1,41 @@
+.app-button-danger {
+    @extend .govuk-button;
+    
+    // Do this better - some way to override $govuk-button-colour from the extended module?
+    $button-colour: govuk-colour('red');
+    $button-hover-colour: darken(govuk-colour('red'), 5%);
+    $button-shadow-colour: darken(govuk-colour('red'), 15%);
+    
+    $button-shadow-size: $govuk-border-width-form-element;
+    
+    background-color: $button-colour;
+    
+    &:focus, &:hover {
+        background-color: $button-hover-colour;
+    }
+    
+    .app-button-danger--disabled,
+    .app-button-danger[disabled="disabled"],
+    .app-button-danger[disabled] {
+        opacity: (.5);
+        background: $button-colour;
+
+        &:hover {
+            background-color: $button-colour;
+            cursor: default;
+        }
+
+        &:focus {
+            outline: none;
+        }
+
+        &:active {
+            top: 0;
+            -webkit-box-shadow: 0 $button-shadow-size 0 $button-shadow-colour;
+                    box-shadow: 0 $button-shadow-size 0 $button-shadow-colour; // s0
+            @include govuk-if-ie8 {
+                border-bottom: $button-shadow-size solid $button-shadow-colour; // s0
+            }
+        }
+    }
+}
