@@ -1,0 +1,13 @@
+.app-flash-summary--info, .app-flash-summary--message {
+    @extend .govuk-error-summary;
+    
+    @extend .govuk-\!-margin-bottom-2;
+    
+    border: $govuk-border-width-mobile solid lighten(govuk-colour('green'), 10%);
+}
+
+.app-flash-summary--error, .app-flash-summary--warning {
+    @extend .app-flash-summary--info;
+    
+    border: $govuk-border-width-mobile solid govuk-colour('red');
+}

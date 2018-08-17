@@ -1,0 +1,23 @@
+{% extends '_base.html' %}
+{% block title %}Your account{% endblock%}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Your account</h1>
+    
+    
+    <form method="POST" action="{{ url_for('.revoke_github') }}" data-module="disable-on-submit">
+      <input class="govuk-button" type="submit" value="Revoke authorization for GitHub"{% if github_status != "valid" %} disabled{% endif %}>
+    </form>
+    
+    <form method="POST" action="{{ url_for('.revoke_trello') }}" data-module="disable-on-submit">
+      <input class="govuk-button" type="submit" value="Revoke authorization for Trello"{% if trello_status != "valid" %} disabled{% endif %}>
+    </form>
+    
+    <form method="GET" action="{{ url_for('.delete_account') }}" data-module="disable-on-submit">
+      <input class="app-button-danger" type="submit" value="Delete account">
+    </form>
+  </div>
+</div>
+{% endblock %}

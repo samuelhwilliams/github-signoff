@@ -1,0 +1,24 @@
+{% extends '_base.html' %}
+{% block title %}Delete your account{% endblock%}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Delete your account</h1>
+    <div class="govuk-body">
+      If you are no longer using this powerup, you can delete your account. This will delete any active authorization tokens and the powerup will no longer monitor your linked accounts.
+    </div>
+    <div class="govuk-warning-text">
+      <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+      <strong class="govuk-warning-text__text">
+        <span class="govuk-warning-text__assistive">Warning</span>
+        This action cannot be undone. All of your data will be immediately and irrevocably removed.
+      </strong>
+    </div>
+    <form method="POST" action="{{ url_for('.delete_account') }}" data-module="disable-on-submit disable-permanently">
+      {{ delete_account_form.csrf_token }}
+      <input class="app-button-danger" type="submit" value="Permanently delete account">
+    </form>
+  </div>
+</div>
+{% endblock %}

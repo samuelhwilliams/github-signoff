@@ -1,0 +1,22 @@
+{% extends '_base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Login to create your integration</h1>
+    <form method="POST" data-module="disable-on-submit">
+      {{ login_form.csrf_token }}
+      <div class="govuk-form-group">
+        {{ login_form.email.label(class_="govuk-label") }}
+          <span id="login-hint" class="govuk-hint">
+            You will receive an email that you can use to login to the service
+          </span>
+        {{ login_form.email(class_="govuk-input") }}
+      </div>
+      <input type="submit" class="govuk-button" value="Login">
+    </form>
+  </div>
+</div>
+{% endblock %}

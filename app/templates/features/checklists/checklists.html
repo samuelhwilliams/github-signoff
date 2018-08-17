@@ -1,0 +1,23 @@
+{% extends '_base.html' %}
+
+{% block title %}Trello checklists{% endblock %}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Trello checklists</h1>
+
+    <p class="govuk-body">This feature creates checklists on Trello when cards are referenced in pull requests. Each pull requests creates one entry in a checklist called ‘Pull requests’ which will be automatically ticked off when the pull request is merged.</p>
+    
+    <h2 class="govuk-heading-l">Turn on or off</h2>
+    <form method="POST" action="{{ url_for('.feature_checklists') }}" data-module="disable-on-submit">
+      {{ toggle_checklist_feature_form.csrf_token }}
+      {% if current_user.checklist_feature_enabled %}
+      <input class="govuk-button app-button-danger" type="submit" id="authorize-github" value="Disable feature">
+      {% else %}
+      <input class="govuk-button" type="submit" id="authorize-github" value="Enable feature">
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

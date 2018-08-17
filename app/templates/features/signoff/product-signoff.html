@@ -1,0 +1,56 @@
+{% extends '_base.html' %}
+
+{% block title %}Product sign-off checks{% endblock %}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <h1 class="govuk-heading-xl">Product sign-off checks</h1>
+
+    <p class="govuk-body">Enable product sign-off checks for pull requests which are linked to Trello cards. A visible marker will be attached to each pull request showing whether or not it has been signed off by a product manager.</p>
+    <details class="govuk-details">
+      <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">
+          When to use this feature
+        </span>
+      </summary>
+      <div class="govuk-details__text">
+        To use this feature, your team’s workflow should have a product manager sign off stories before they are merged to the master branch of the codebase. If your team merges code before product review, this feature won’t be useful.
+      </div>
+      <div class="govuk-details__text">
+        You may also consider requiring all status checks on a pull request to be passing before code can be merged. This can be configured in your repository's settings on GitHub.
+      </div>
+    </details>
+    
+    <h2 class="govuk-heading-l">Existing checks</h2>
+    {% if trello_boards_and_lists|length > 0 %}
+      <table class="govuk-table">
+        <caption class="govuk-table__caption govuk-!-font-weight-regular">Trello boards with existing sign-off checks:</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th class="govuk-table__header" scope="col"></th>
+            <th class="govuk-table__header" scope="col"></th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          {% for trello_board, trello_list in trello_boards_and_lists.items() %}
+          <tr class="govuk-table__row">
+            <th class="govuk-table__cell">{{ trello_board.name }}</th>
+            <td class="govuk-table__cell govuk-table__header--numeric" scope="col">
+              <a class="govuk-link" href="{{ url_for('.trello_manage_product_signoff', board_id=trello_board.board_id) }}">Manage</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+    <p class="govuk-inset-text">You have not set up any product sign-off checks yet.</p>
+    {% endif %}
+    
+    <h2 class="govuk-heading-l">Create a new check</h2>
+    <form action="{{ url_for('.trello_choose_board') }}" data-module="disable-on-submit">
+      <input class="govuk-button" type="submit" id="authorize-github" value="Create new check">
+    </form>
+  </div>
+</div>
+{% endblock %}
