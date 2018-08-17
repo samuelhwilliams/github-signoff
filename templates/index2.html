@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>GitHub Sign-Off</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {#
+  <link rel="stylesheet" type="text/css" media="screen" href="main.css" />
+  <script src="main.js"></script>
+  #}
+</head>
+<body>
+  {% set messages = get_flashed_messages() %}
+  {% if messages %}
+    {% for message in messages %}
+      {{ message }}
+    {% endfor %}
+  {% endif %}
+  
+  <form method="POST" onsubmit="document.getElementById('authorize-github').disabled = true;">
+    <input type="submit" id="authorize-github" value="Authorize Github">
+  </form>
+  
+  {#
+  <form method="POST" action="{{ url_for('.authorize_trello') }}" onsubmit="document.getElementById('authorize-trello').disabled = true;" target="_blank">
+    <input type="submit" id="authorize-trello" value="Get Trello Authorization Token">
+  </form>
+  
+  <br>
+  
+  <form method="POST" action="{{ url_for('.authorize_trello_finish') }}" onsubmit="document.getElementById('authorize-trello-finish').disabled = true;" enctype="multipart/form-data">
+    {{ authorize_form.csrf_token }}
+    {{ authorize_form.trello_auth_key() }}
+    <input type="submit" value="Complete Authorization">
+  </form>
+  
+  #}
+</body>
+</html>

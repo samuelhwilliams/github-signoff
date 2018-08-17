@@ -1,0 +1,79 @@
+{
+   "model":{
+      "id":"5b76c521326f9d1e84cb9817",
+      "name":"Product accepted",
+      "closed":false,
+      "idBoard":"5b76c521326f9d1e84cb9814",
+      "pos":49152
+   },
+   "action":{
+      "id":"5b76f6777bf8381f64b5332b",
+      "idMemberCreator":"5b76c51b44ae2b4ca13f7442",
+      "data":{
+         "listAfter":{
+            "name":"Product accepted",
+            "id":"5b76c521326f9d1e84cb9817"
+         },
+         "listBefore":{
+            "name":"Doing",
+            "id":"5b76c521326f9d1e84cb9816"
+         },
+         "board":{
+            "shortLink":"zXLjudSy",
+            "name":"Test Board",
+            "id":"5b76c521326f9d1e84cb9814"
+         },
+         "card":{
+            "shortLink":"f4IPN6bC",
+            "idShort":1,
+            "name":"some new card",
+            "id":"5b76f66f27c7493b084e7029",
+            "idList":"5b76c521326f9d1e84cb9817"
+         },
+         "old":{
+            "idList":"5b76c521326f9d1e84cb9816"
+         }
+      },
+      "type":"updateCard",
+      "date":"2018-08-17T16:23:19.076Z",
+      "limits":{
+
+      },
+      "display":{
+         "translationKey":"action_move_card_from_list_to_list",
+         "entities":{
+            "card":{
+               "type":"card",
+               "idList":"5b76c521326f9d1e84cb9817",
+               "id":"5b76f66f27c7493b084e7029",
+               "shortLink":"f4IPN6bC",
+               "text":"some new card"
+            },
+            "listBefore":{
+               "type":"list",
+               "id":"5b76c521326f9d1e84cb9816",
+               "text":"Doing"
+            },
+            "listAfter":{
+               "type":"list",
+               "id":"5b76c521326f9d1e84cb9817",
+               "text":"Product accepted"
+            },
+            "memberCreator":{
+               "type":"member",
+               "id":"5b76c51b44ae2b4ca13f7442",
+               "username":"githubsignoff",
+               "text":"GitHub SignOff"
+            }
+         }
+      },
+      "memberCreator":{
+         "id":"5b76c51b44ae2b4ca13f7442",
+         "avatarHash":null,
+         "avatarUrl":null,
+         "fullName":"GitHub SignOff",
+         "initials":"GS",
+         "username":"githubsignoff"
+      }
+   }
+}
