@@ -1,0 +1,30 @@
+{% extends '_base.html' %}
+{% import 'macros/design_system.html' as design_system %}
+
+{% block title %}Transfer connected repositories{% endblock %}
+
+{% block main %}
+<div class="govuk-grid-row">
+  <div class="govuk-grid-column-two-thirds">
+    <div class="govuk-form-group">
+      <fieldset class="govuk-fieldset" aria-describedby="form-hint">
+        <legend class="govuk-fieldset__legend govuk-fieldset__legend--xl">
+          <h1 class="govuk-fieldset__heading">Transfer connected repositories</h1>
+        </legend>
+        <span id="form-hint" class="govuk-hint govuk-!-margin-top-6">
+          <p class="govuk-hint">These repositories are currently connected to the powerup through another person’s account.</p>
+          <p class="govuk-hint">You can transfer a repository to your account if it’s more appropriate for you to control it. The current owner will receive an email informing them of the transfer.</p>
+        </span>
+        {{ design_system.warning_text(text="The current owner will be sent details of the transfer, including your email address.") }}
+      </fieldset>
+      <form method="POST" data-module="disable-on-submit disable-permanently">
+        {{ repo_form.csrf_token }}
+        <div class="govuk-radios">
+          {{ repo_form.repo_choice() }}
+        </div>
+        <input class="govuk-button govuk-!-margin-top-6" type="submit" value="Confirm transfer">
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

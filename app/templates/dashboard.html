@@ -1,0 +1,100 @@
+{% extends '_base.html' %}
+{% block title %}Dashboard{% endblock%}
+
+{% block main %}
+<div class="govuk-grid-row">
+<div class="govuk-grid-column-two-thirds">
+  <h1 class="govuk-heading-xl">Powerup dashboard</h1>
+  <div>
+    <ol class="app-task-list">
+      <li>
+        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">1. </span>Authorise external services</h2>
+        <ul class="app-task-list__items">
+          <li class="app-task-list__item">
+            {% if not github_status %}
+            <a href="{{ url_for('.integrate_github') }}">Create authorisation for GitHub</a>
+            {% elif github_status == "invalid" %}
+            <a href="{{ url_for('.integrate_github') }}">Re-authorise GitHub</a>
+            {% else %}
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Create authorisation for GitHub</div>
+            {% endif %}
+            
+            {% if github_status == "valid" %}
+            <strong class="govuk-tag app-task-list__task-state">done</strong>
+            {% elif github_status == "invalid" %}
+            <strong class="govuk-tag app-tag--error app-task-list__task-state">invalid token</strong>
+            {% endif %}
+          </li>
+          <li class="app-task-list__item">
+            {% if not trello_status %}
+            <a href="{{ url_for('.integrate_trello') }}">Create authorisation for Trello</a>
+            {% elif trello_status == "invalid" %}
+            <a href="{{ url_for('.integrate_trello') }}">Re-authorise Trello</a>
+            {% else %}
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Create authorisation for Trello</div>
+            {% endif %}
+            
+            {% if trello_status == "valid" %}
+            <strong class="govuk-tag app-task-list__task-state">done</strong>
+            {% elif trello_status == "invalid" %}
+            <strong class="govuk-tag app-tag--error app-task-list__task-state">invalid token</strong>
+            {% endif %}
+          </li>
+        </ul>
+      </li>
+      <li>
+        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">2. </span>Configure powerup</h2>
+        <ul class="app-task-list__items">
+          <li class="app-task-list__item">
+            {% if github_status == "valid" and trello_status == "valid" %}
+            <a class="govuk-link" href="{{ url_for('.github_choose_repos') }}">Connect repositories</a>
+              {% if github_repos|length > 0 %}
+              <strong class="govuk-tag app-task-list__task-state">{% if github_repos|length == 1 %}{{ github_repos|length }} repository{% else %}{{ github_repos|length }} repositories{% endif %}</strong>
+              {% endif %}
+            {% else %}
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Connect repositories</div>
+            <strong class="govuk-tag app-tag--inactive app-task-list__task-state">can’t start yet</strong>
+            {% endif %}
+          </li>
+        </ul>
+      </li>
+      <li>
+        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">3. </span>Choose features</h2>
+        <ul class="app-task-list__items">
+          <li class="app-task-list__item">
+            {% if github_status == "valid" and trello_status == "valid" and github_repos|length > 0 %}
+            <a class="govuk-link" href="{{ url_for('.trello_product_signoff') }}">Product sign-off checks</a>
+            
+              {% if product_signoffs|length > 0 %}
+              <strong class="govuk-tag app-task-list__task-state">{% if product_signoffs|length == 1 %}{{ product_signoffs|length }} board{% else %}{{ product_signoffs|length }} boards{% endif %}</strong>
+              {% else %}
+              <strong class="govuk-tag app-tag--inactive app-task-list__task-state">not active</strong>
+              {% endif %}
+            
+            {% else %}
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Product sign-off checks</div>
+            <strong class="govuk-tag app-tag--inactive app-task-list__task-state">can’t start yet</strong>
+            {% endif %}
+          </li>
+          <li class="app-task-list__item">
+            {% if github_status == "valid" and trello_status == "valid" and github_repos|length > 0 %}
+            <a class="govuk-link" href="{{ url_for('.feature_checklists') }}">Pull request checklists</a>
+            
+              {% if current_user.checklist_feature_enabled %}
+              <strong class="govuk-tag app-task-list__task-state">active</strong>
+              {% else %}
+              <strong class="govuk-tag app-tag--inactive app-task-list__task-state">not active</strong>
+              {% endif %}
+              
+            {% else %}
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Pull request checklists</div>
+            <strong class="govuk-tag app-tag--inactive app-task-list__task-state">can’t start yet</strong>
+            {% endif %}
+          </li>
+        </ul>
+      </li>
+    </ol>
+  </div>
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+.app-tag--active {
+    @extend .govuk-tag;
+    background-color: govuk-colour("green");
+}
+
+.app-tag--inactive {
+    @extend .govuk-tag;
+    background-color: govuk-colour("grey-2");
+}
+
+.app-tag--error {
+    @extend .govuk-tag;
+    background-color: govuk-colour("red");
+}
