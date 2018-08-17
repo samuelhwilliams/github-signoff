@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Select Repository</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <h1>Select the repository where you want to create a product signoff check</h1>
+  <form method="POST">
+    {{ repo_form.csrf_token }}
+    {{ repo_form.repo_choice.label }} {{ repo_form.repo_choice }}
+    <input type="submit" value="Continue">
+  </form>
+</body>
+</html>

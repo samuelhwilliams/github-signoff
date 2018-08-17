@@ -1,0 +1,53 @@
+{% extends '_base.html' %}
+{% block title %}Dashboard{% endblock%}
+
+{% block content %}
+<h1>Dashboard</h1>
+<div>
+  <h2>GitHub</h2>
+  {% if not github_integrated %}
+  <p>
+  <a href="{{ url_for('.integrate_github') }}">
+    Authorize access to GitHub
+  </a>
+  </p>
+  {% else %}
+  <a href="{{ url_for('.github_choose_repos') }}">Choose monitored repositories</a>
+  <form method="POST" action="{{ url_for('.revoke_github') }}">
+    <input type="submit" value="Revoke access">
+  </form>
+  {% endif %}
+  
+  <h2>Trello</h2>
+  {% if not trello_integrated %}
+  <p>
+  <a href="{{ url_for('.integrate_trello') }}">
+    Authorize access to Trello
+  </a>
+  </p>
+  {% else %}
+  <a href="{{ url_for('.trello_choose_board') }}">Choose monitored Trello lists</a>
+  <form method="POST" action="{{ url_for('.revoke_trello') }}">
+    <input type="submit" value="Revoke access">
+  </form>
+  {% endif %}
+  
+  {% if github_repos %}
+  <h2>Linked to the following GitHub repositories:</h2>
+  <ul>
+  {% for github_repo in github_repos %}
+  <li>{{ github_repo.fullname }}</li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  
+  {% if trello_lists %}
+  <h2>Linked to the following Trello lists:</h2>
+  <ul>
+  {% for trello_list in trello_lists %}
+  <li>“{{ trello_list.list_name }}” list on the “{{ trello_list.board_name }}” board</li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

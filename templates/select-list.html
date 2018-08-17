@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Select Trello Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+  <h1>Select the list indicating 'Product accepted'</h1>
+  <form method="POST">
+    {{ list_form.csrf_token }}
+    {{ list_form.list_choice.label }} {{ list_form.list_choice }}
+    <input type="submit" value="Continue">
+  </form>
+</body>
+</html>
