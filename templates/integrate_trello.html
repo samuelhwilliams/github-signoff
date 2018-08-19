@@ -1,0 +1,15 @@
+{% extends '_base.html' %}
+
+{% block title %}New integration{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('.authorize_trello') }}" onsubmit="document.getElementById('authorize-trello').disabled = true;" target="_blank">
+  <input type="submit" id="authorize-trello" value="Authorize Trello">
+</form>
+
+<form method="POST" action="{{ url_for('.authorize_trello_finish') }}" onsubmit="document.getElementById('authorize-trello-finish').disabled = true;" enctype="multipart/form-data">
+  {{ authorize_form.csrf_token }}
+  {{ authorize_form.trello_auth_key() }}
+  <input type="submit" value="Complete Authorization">
+</form>
+{% endblock %}

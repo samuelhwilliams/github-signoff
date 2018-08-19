@@ -19,9 +19,10 @@ from flask import (
     url_for,
     session,
 )
-from flask_login import LoginManager, login_user, logout_user
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import joinedload
 
 from trello import TrelloClient
 from forms import (
@@ -34,7 +35,7 @@ from forms import (
 
 app = Flask(__name__, template_folder="templates")
 
-app.config["SECRET_KEY"] = os.environ["SECRET_KEY"].encode('utf8')
+app.config["SECRET_KEY"] = os.environ["SECRET_KEY"].encode("utf8")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL", "sqlite:////tmp/flask_app.db"
 )
@@ -72,14 +73,13 @@ SERVER_NAME = os.environ["SERVER_NAME"]
 
 def my_login_user(user):
     login_user(user)
-    print('setting token id:' + str(user.current_token_id))
-    session['token_id'] = user.current_token_id
+    session["token_id"] = user.current_token_id
 
 
 def my_logout_user():
     logout_user()
-    if 'token_id' in session:
-        del session['token_id']
+    if "token_id" in session:
+        del session["token_id"]
 
 
 class StatusEnum(enum.Enum):
@@ -95,13 +95,19 @@ class StatusEnum(enum.Enum):
 
 
 class LoginToken(db.Model):
-    __tablename__ = 'login_token'
+    __tablename__ = "login_token"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     payload = db.Column(db.Text)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.utcnow() + timedelta(minutes=5))
-    consumed_at = db.Column(db.DateTime, nullable=True)   # either by logging in or creating a second token
+    expires_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.utcnow() + timedelta(minutes=5),
+    )
+    consumed_at = db.Column(
+        db.DateTime, nullable=True
+    )  # either by logging in or creating a second token
 
     @classmethod
     def create_token(cls, user):
@@ -112,62 +118,70 @@ class LoginToken(db.Model):
                 token.consumed_at = datetime.utcnow()
                 db.session.add(token)
             db.session.commit()
-            
+
         fernet = Fernet(app.config["SECRET_KEY"])
         payload = fernet.encrypt(json.dumps({"id": user.id}).encode("utf8"))
-        
+
         token = cls()
         token.user = user
         token.payload = payload
-        
+
         db.session.add(token)
         db.session.commit()
-        
+
         return token
-    
+
     @classmethod
     def login_user(cls, payload):
         fernet = Fernet(app.config["SECRET_KEY"])
-        data = json.loads(fernet.decrypt(payload.encode('utf8')).decode('utf8'))
-        token = cls.query.filter(cls.user_id == data['id'], cls.consumed_at == None).first()
-        
+        data = json.loads(fernet.decrypt(payload.encode("utf8")).decode("utf8"))
+        token = cls.query.filter(
+            cls.user_id == data["id"], cls.consumed_at == None
+        ).first()
+
         if not token:
-            flash('no token', 'error')
+            flash("no token", "error")
             return None
-        
+
         if token.consumed_at:
-            flash('token already used', 'error')
+            flash("token already used", "error")
             return None
-            
+
         if datetime.now() <= token.expires_at:
-            flash('token expired', 'error')
+            flash("token expired", "error")
             return None
-        
+
         token.consumed_at = datetime.now()
         token.user.active = True
         token.user.current_token = token
-        
+
         db.session.add(token)
         db.session.add(token.user)
         db.session.commit()
-        
+
         my_login_user(token.user)
-        
-        flash('Login successful', 'info')
-        
+
+        flash("Login successful", "info")
+
         return token.user
 
 
 class User(db.Model):
-    __tablename__ = 'user'
+    __tablename__ = "user"
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.Text, index=True)
     active = db.Column(db.Boolean, default=False)
-    current_token_id = db.Column(db.Integer, db.ForeignKey('login_token.id'), nullable=True)
-    
-    login_tokens = db.relationship(LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref="user")
-    current_token = db.relationship(LoginToken, primaryjoin=current_token_id == LoginToken.id, lazy="joined")
-    
+    current_token_id = db.Column(
+        db.Integer, db.ForeignKey("login_token.id"), nullable=True
+    )
+
+    login_tokens = db.relationship(
+        LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref="user"
+    )
+    current_token = db.relationship(
+        LoginToken, primaryjoin=current_token_id == LoginToken.id, lazy="joined"
+    )
+
     @classmethod
     def find_or_create(cls, email):
         user = cls.query.filter(cls.email == email).first()
@@ -176,16 +190,16 @@ class User(db.Model):
             db.session.add(user)
             db.session.commit()
         return user
-    
+
     def is_authenticated(self):
         return self.id and self.active is True
-    
+
     def is_active(self):
         return self.is_authenticated()
-    
+
     def is_anonymous(self):
         return not self.is_authenticated()
-    
+
     def get_id(self):
         return str(self.id)
 
@@ -194,16 +208,19 @@ class User(db.Model):
 def load_user(user_id):
     user = User.query.get(user_id)
     
-    if "token_id" not in session:
+    if not user:
         return None
-        
+
+    elif "token_id" not in session:
+        return None
+
     elif user.current_token_id != session["token_id"]:
-        flash('You have been logged of the session.')
+        flash("You have been logged of the session.")
         del session["token_id"]
         return None
-        
-    return User.query.get(user_id)
-    
+
+    return user
+
 
 class Integration(db.Model):
     guid = db.Column(db.Text, primary_key=True)
@@ -211,6 +228,17 @@ class Integration(db.Model):
     github_token = db.Column(db.Text, nullable=True)
     repository_id = db.Column(db.BigInteger, unique=True, nullable=True)
     trello_token = db.Column(db.Text, unique=True, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey(User.id), nullable=False)
+    
+    user = db.relationship(User, lazy="joined", backref="integrations")
+
+
+class IntegratedTrelloList(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    integration_guid = db.Column(db.Text, db.ForeignKey(Integration.guid))
+    trello_list_id = db.Column(db.BigInteger, unique=True, index=True)
+    
+    integration = db.relationship(Integration, lazy="joined", backref="trello_lists")
 
 
 class PullRequestStatus(db.Model):
@@ -227,9 +255,10 @@ class PullRequestStatus(db.Model):
     branch = db.Column(db.Text, index=True, nullable=False)
     status = db.Column(db.Text, nullable=False)  # should be an enum
     url = db.Column(db.Text, nullable=False)
+    integration_guid = db.Column(db.Text, db.ForeignKey(Integration.guid), nullable=False)
     trello_list_id = db.Column(db.Text, index=True, nullable=True)
 
-    integration = db.relationship(Integration, lazy="joined")
+    integration = db.relationship(Integration, primaryjoin=integration_guid == Integration.guid, lazy="joined", backref="pull_requests")
 
     @classmethod
     def create_from_github(cls, data):
@@ -276,18 +305,18 @@ def index():
             user.active = False
             db.session.add(user)
             db.session.commit()
-            
+
         token = LoginToken.create_token(user)
         body = render_template("email_login_link.html", payload=token.payload)
         msg = Message(
             "Login to Github-Trello-Signoff",
             sender=app.config["MAIL_DEFAULT_SENDER"],
             recipients=[form.email.data],
-            html=body
+            html=body,
         )
-        print(url_for('.login', payload=token.payload, _external=True))
-        mail.send(msg)
-        
+        print(url_for(".login", payload=token.payload, _external=True))
+        # mail.send(msg)
+
         flash("A login link has been emailed to you. Please click it within 5 minutes.")
 
     return render_template("index.html", form=form)
@@ -297,40 +326,57 @@ def index():
 def login(payload):
     form = LoginForm()
     user = LoginToken.login_user(payload)
-    return redirect(url_for('.index'))
+    return redirect(url_for(".dashboard"))
 
 
-@app.route("/2", methods=["GET", "POST"])
-def index2():
-    if request.method == "POST":
-        integration = Integration(
-            guid=str(uuid.uuid4()), github_oauth_state=str(uuid.uuid4())
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    integrations = Integration.query.filter(Integration.user_id == current_user.id).all()
+    return render_template("dashboard.html", integrations=integrations)
+
+
+@app.route("/integration/start-github")
+@login_required
+def integrate_github():
+    return render_template("integrate_github.html")
+
+
+@app.route('/integration/authorize-github', methods=["POST"])
+@login_required
+def authorize_github():
+    integration = Integration(
+        guid=str(uuid.uuid4()),
+        github_oauth_state=str(uuid.uuid4()),
+        user_id=current_user.id,
+    )
+    db.session.add(integration)
+    db.session.commit()
+    session["integration"] = integration.guid
+    
+    return redirect(
+        GITHUB_OAUTH_URL.format(
+            client_id=GITHUB_CLIENT_ID,
+            redirect_uri="https://" + os.environ["SERVER_NAME"] + url_for(".github_authorization_complete"),
+            scope="repo:status",
+            state=integration.github_oauth_state,
         )
-        db.session.add(integration)
-        db.session.commit()
-        session["integration"] = integration.guid
-        print(SERVER_NAME + url_for(".github_authorization_complete"))
-        return redirect(
-            GITHUB_OAUTH_URL.format(
-                client_id=GITHUB_CLIENT_ID,
-                redirect_uri=SERVER_NAME + url_for(".github_authorization_complete"),
-                scope="repo:status",
-                state=integration.github_oauth_state,
-            )
-        )
-
-    return render_template("index2.html")
+    )
+    
 
 
 @app.route("/github/callback", methods=["GET", "POST"])
 def github_events():
-    trello_card_urls = PullRequestStatus.find_trello_card_urls(request.json)
-    PullRequestStatus.create_from_github(request.json)
+    # trello_card_urls = PullRequestStatus.find_trello_card_urls(request.json)
+    print(request)
+    if request.json:
+        PullRequestStatus.create_from_github(request.json)
 
     return jsonify(status="OK"), 200
 
 
 @app.route("/github/callback/complete")
+@login_required
 def github_authorization_complete():
     integration = Integration.query.filter(
         Integration.guid == session["integration"]
@@ -352,8 +398,16 @@ def github_authorization_complete():
         db.session.add(integration)
         db.session.commit()
         flash("GitHub integration successful.")
+        return redirect(url_for(".integrate_trello"))
 
-    return redirect(url_for(".index"))
+    flash("Something went wrong with integration?" + str(response))
+    return redirect(url_for(".dashboard"))
+
+
+@app.route("/integration/start-trello")
+def integrate_trello():
+    authorize_form = AuthorizeTrelloForm()
+    return render_template("integrate_trello.html", authorize_form=authorize_form)
 
 
 @app.route("/trello/authorize", methods=["POST"])
@@ -369,16 +423,15 @@ def authorize_trello():
 
 
 @app.route("/trello/authorize/finish", methods=["POST"])
+@login_required
 def authorize_trello_finish():
     form = AuthorizeTrelloForm()
 
     if form.validate_on_submit():
-        trello_token = TrelloIntegration(
-            guid=str(uuid.uuid4()), token=form.trello_auth_key.data
-        )
-        db.session.add(trello_token)
+        integration = Integration.query.filter(Integration.user_id == current_user.id).one()
+        integration.trello_token = form.trello_auth_key.data
+        db.session.add(integration)
         db.session.commit()
-        session["trello_token_guid"] = trello_token.guid
         flash("Authorization complete.", "info")
         return redirect(url_for(".choose_trello_board")), 200
 
@@ -387,14 +440,10 @@ def authorize_trello_finish():
 
 
 @app.route("/trello/choose-board")
+@login_required
 def choose_trello_board():
-    if "trello_token_guid" not in session:
-        abort(403)
-
-    trello_token = TrelloIntegration.query.filter(
-        TrelloIntegration.guid == session["trello_token_guid"]
-    ).one()
-    trello_client = TrelloClient(TRELLO_API_KEY, trello_token.token)
+    integration = Integration.query.filter(Integration.user_id == current_user.id).one()
+    trello_client = TrelloClient(TRELLO_API_KEY, integration.trello_token)
 
     board_form = ChooseTrelloBoardForm(trello_client.get_boards())
 
@@ -402,16 +451,12 @@ def choose_trello_board():
 
 
 @app.route("/trello/choose-list", methods=["POST"])
+@login_required
 def choose_trello_list():
-    if "trello_token_guid" not in session:
-        abort(403)
-
+    integration = Integration.query.filter(Integration.user_id == current_user.id).one()
+    trello_client = TrelloClient(TRELLO_API_KEY, integration.trello_token)
+    
     board_form = ChooseTrelloBoardForm()
-
-    trello_token = TrelloIntegration.query.filter(
-        TrelloIntegration.guid == session["trello_token_guid"]
-    ).one()
-    trello_client = TrelloClient(TRELLO_API_KEY, trello_token.token)
 
     list_form = ChooseTrelloListForm(
         trello_client.get_lists(board_id=board_form.board_choice.data)
@@ -421,24 +466,24 @@ def choose_trello_list():
 
 
 @app.route("/trello/create-webhook", methods=["POST"])
+@login_required
 def create_trello_webhook():
-    if "trello_token_guid" not in session:
-        abort(403)
+    integration = Integration.query.filter(Integration.user_id == current_user.id).one()
+    trello_client = TrelloClient(TRELLO_API_KEY, integration.trello_token)
 
     list_form = ChooseTrelloListForm()
 
-    trello_token = TrelloIntegration.query.filter(
-        TrelloIntegration.guid == session["trello_token_guid"]
-    ).one()
-    trello_client = TrelloClient(TRELLO_API_KEY, trello_token.token)
-
     trello_client.create_webhook(
         object_id=list_form.list_choice.data,
-        callback_url=f"{SERVER_NAME}{url_for('trello_callback', trello_token_guid=trello_token.guid)}",
+        callback_url=f"{SERVER_NAME}{url_for('trello_callback', integration_guid=integration.guid)}",
     )
-
-    trello_token.trello_list_id = list_form.list_choice.data
-    db.session.add(trello_token)
+    
+    integrated_trello_list = IntegratedTrelloList(
+        integration_guid=integration.guid,
+        trello_list_id=list_form.list_choice.data,
+    )
+    
+    db.session.add(integrated_trello_list)
     db.session.commit()
 
     flash("You have successfully integrated with Trello", "info")
@@ -446,21 +491,19 @@ def create_trello_webhook():
 
 
 @app.route("/trello/callback", methods=["HEAD", "POST"])
+@login_required
 def trello_callback():
-    if "trello_token_guid" not in request.args:
-        abort(403)
-
     if request.method == "POST":
-        trello_token = TrelloIntegration.query.filter(
-            TrelloIntegration.guid == request.args["trello_token_guid"]
-        ).one()
-
         data = json.loads(request.get_data(as_text=True))
         if data.get("action", {}).get("type") == "updateCard":
-            pull_requests = PullRequestStatus.query.filter(
-                PullRequestStatus.trello_list_id
+            integrated_trello_list = IntegratedTrelloList.query.filter(
+                IntegratedTrelloList.trello_list_id
                 == data["action"]["data"]["listAfter"]["id"]
-            ).all()
+            ).one()
+            
+            print(integrated_trello_list.integration.pull_requests)
+            
+            trello_client = TrelloClient(TRELLO_API_KEY, integrated_trello_list.integration.trello_token)
 
             if pull_requests:
                 for pull_request in pull_requests:
