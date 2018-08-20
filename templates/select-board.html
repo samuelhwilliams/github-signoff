@@ -8,7 +8,8 @@
 </head>
 <body>
   <h1>Select your trello board</h1>
-  <form method="POST" action="{{ url_for('.choose_trello_list') }}">
+  <form method="POST">
+    {{ board_form.csrf_token }}
     {{ board_form.board_choice.label }} {{ board_form.board_choice }}
     <input type="submit" value="Continue">
   </form>

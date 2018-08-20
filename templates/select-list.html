@@ -8,7 +8,8 @@
 </head>
 <body>
   <h1>Select the list indicating 'Product accepted'</h1>
-  <form method="POST" action="{{ url_for('.create_trello_webhook') }}">
+  <form method="POST">
+    {{ list_form.csrf_token }}
     {{ list_form.list_choice.label }} {{ list_form.list_choice }}
     <input type="submit" value="Continue">
   </form>

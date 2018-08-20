@@ -7,10 +7,19 @@ class LoginForm(FlaskForm):
     email = StringField(label="Email address", validators=[Email()])
 
 
+class ChooseGithubRepoForm(FlaskForm):
+    repo_choice = SelectField(label="Choose your repository", validators=[DataRequired()], coerce=int)
+
+    def __init__(self, repos=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if repos is None:
+            repos = []
+
+        self.repo_choice.choices = [(r["id"], r["name"]) for r in repos]
+
+
 class AuthorizeTrelloForm(FlaskForm):
-    trello_integration = StringField(
-        label="Trello Authorization Token", validators=[DataRequired()]
-    )
+    trello_integration = StringField(label="Trello Authorization Token", validators=[DataRequired()])
 
 
 class ChooseTrelloBoardForm(FlaskForm):

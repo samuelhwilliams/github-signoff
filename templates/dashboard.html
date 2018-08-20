@@ -2,28 +2,50 @@
 {% block title %}Dashboard{% endblock%}
 
 {% block content %}
-<h1>Integration dashboard</h1>
+<h1>Dashboard</h1>
 <div>
-  <p>Authorized with GitHub? {% if github_integration %}Yes{% else %}No{% endif %}</p>
+  <h2>GitHub</h2>
   {% if not github_integration %}
   <p>
   <a href="{{ url_for('.integrate_github') }}">
     Authorize access to GitHub
   </a>
   </p>
+  {% else %}
+  <form method="POST" action="{{ url_for('.revoke_github') }}">
+    <input type="submit" value="Revoke access">
+  </form>
   {% endif %}
   
-  <p>Authorized with Trello? {% if trello_integration %}Yes{% else %}No{% endif %}</p>
-  <p>
+  <h2>Trello</h2>
   {% if not trello_integration %}
+  <p>
   <a href="{{ url_for('.integrate_trello') }}">
     Authorize access to Trello
   </a>
+  </p>
   {% else %}
   <form method="POST" action="{{ url_for('.revoke_trello') }}">
     <input type="submit" value="Revoke access">
   </form>
   {% endif %}
-  </p>
+  
+  {% if github_integration and trello_integration %}
+  <h2>Create new product signoff check</h2>
+  <div>
+    <a href="{{ url_for('.signoff_choose_repo') }}">
+      Click here
+    </a>
+  </div>
+  {% endif %}
+  
+  {% if signoff_integrations %}
+  <h2>Existing integrations</h2>
+  <ul>
+  {% for signoff_integration in signoff_integrations %}
+  <li>GitHub repository “{{ signoff_integration.github_repo_fullname }}” is linked to Trello board “{{ signoff_integration.trello_board_name }}” and list “{{ signoff_integration.trello_list_name }}”.</li>
+  {% endfor %}
+  </ul>
+  {% endif %}
 </div>
 {% endblock %}
