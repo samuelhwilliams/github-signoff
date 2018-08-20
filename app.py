@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
+import base64
 from cryptography.fernet import Fernet
 from datetime import datetime, timedelta
 import enum
 import json
+import logging
 import os
 import requests
 import uuid
@@ -19,10 +21,17 @@ from flask import (
     url_for,
     session,
 )
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_login import (
+    LoginManager,
+    login_user as _login_user,
+    logout_user as _logout_user,
+    login_required,
+    current_user,
+)
 from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, backref
+from sqlalchemy.orm.exc import NoResultFound
 
 from trello import TrelloClient
 from forms import (
@@ -33,15 +42,19 @@ from forms import (
 )
 
 
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__, template_folder="templates")
 
+app.config["PREFERRED_URL_SCHEME"] = "https"
 app.config["SECRET_KEY"] = os.environ["SECRET_KEY"].encode("utf8")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
     "DATABASE_URL", "sqlite:////tmp/flask_app.db"
 )
+app.config["SQLALCHEMY_ECHO"] = False
 app.config["CSRF_ENABLED"] = False
 db = SQLAlchemy(app)
-APP_NAME = "github-signoff"
+APP_NAME = "product-signoff"
 
 app.config["MAIL_SERVER"] = os.environ["MAILGUN_SMTP_SERVER"]
 app.config["MAIL_PORT"] = os.environ["MAILGUN_SMTP_PORT"]
@@ -55,7 +68,13 @@ login_manager = LoginManager(app)
 
 AWAITING_PRODUCT_REVIEW = "Awaiting product review"
 TICKET_APPROVED_BY = "Product accepted by {user}"
+
 TRELLO_AUTHORIZE_URL = "https://trello.com/1/authorize"
+TRELLO_API_KEY = os.environ["TRELLO_API_KEY"]
+TRELLO_TOKEN_SETTINGS = dict(
+    expiration="1hour", scope="read,write", name="github-signoff", key=TRELLO_API_KEY
+)
+
 GITHUB_OAUTH_URL = (
     "https://github.com/login/oauth/authorize"
     "?client_id={client_id}"
@@ -64,22 +83,22 @@ GITHUB_OAUTH_URL = (
     "&state={state}"
 )
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
-
-TRELLO_API_KEY = os.environ["TRELLO_API_KEY"]
 GITHUB_CLIENT_ID = os.environ["GITHUB_CLIENT_ID"]
 GITHUB_CLIENT_SECRET = os.environ["GITHUB_CLIENT_SECRET"]
+
 SERVER_NAME = os.environ["SERVER_NAME"]
 
 
 def my_login_user(user):
-    login_user(user)
-    session["token_id"] = user.current_token_id
+    _login_user(user)
+    session["token_guid"] = user.current_login_token_guid
+    flash("Login successful", "info")
 
 
 def my_logout_user():
-    logout_user()
-    if "token_id" in session:
-        del session["token_id"]
+    _logout_user()
+    if "token_guid" in session:
+        del session["token_guid"]
 
 
 class StatusEnum(enum.Enum):
@@ -96,7 +115,7 @@ class StatusEnum(enum.Enum):
 
 class LoginToken(db.Model):
     __tablename__ = "login_token"
-    id = db.Column(db.Integer, primary_key=True)
+    guid = db.Column(db.Text, primary_key=True)   # TODO:  should change this to a binary/native uuid type
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     payload = db.Column(db.Text)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -119,11 +138,13 @@ class LoginToken(db.Model):
                 db.session.add(token)
             db.session.commit()
 
-        fernet = Fernet(app.config["SECRET_KEY"])
-        payload = fernet.encrypt(json.dumps({"id": user.id}).encode("utf8"))
-
         token = cls()
+        token.guid = str(uuid.uuid4())
         token.user = user
+
+        fernet = Fernet(app.config["SECRET_KEY"])
+        payload_data = {"user_id": user.id, "token_guid": token.guid}
+        payload = base64.urlsafe_b64encode(fernet.encrypt(json.dumps(payload_data).encode('utf8'))).decode('utf8')
         token.payload = payload
 
         db.session.add(token)
@@ -133,37 +154,40 @@ class LoginToken(db.Model):
 
     @classmethod
     def login_user(cls, payload):
+        my_logout_user()
         fernet = Fernet(app.config["SECRET_KEY"])
-        data = json.loads(fernet.decrypt(payload.encode("utf8")).decode("utf8"))
-        token = cls.query.filter(
-            cls.user_id == data["id"], cls.consumed_at == None
-        ).first()
+        payload_data = json.loads(fernet.decrypt(base64.urlsafe_b64decode(payload.encode("utf8"))))
+        token = cls.query.get(payload_data["token_guid"])
 
         if not token:
-            flash("no token", "error")
-            return None
+            flash("No token found", "error")
+        
+        elif token.user.id != payload_data["user_id"]:
+            flash("Invalid token data", "error")
+            logger.warn("Invalid token data: ", token, token.guid, token.user.id, payload_data["user_id"])
 
-        if token.consumed_at:
-            flash("token already used", "error")
-            return None
+        elif token.consumed_at:
+            flash("Token already used", "error")
+            logger.warn("Token already used: ", token, token.guid, token.payload, token.consumed_at)
 
-        if datetime.now() <= token.expires_at:
-            flash("token expired", "error")
-            return None
+        elif datetime.utcnow() >= token.expires_at:
+            flash("Token expired", "error")
+            logger.warn("Token expired: ", token, token.guid, token.payload, token.expires_at, datetime.utcnow(), token.created_at)
+        
+        else:
+            token.consumed_at = datetime.utcnow()
+            token.user.active = True
+            # token.user.current_login_token = token
 
-        token.consumed_at = datetime.now()
-        token.user.active = True
-        token.user.current_token = token
+            db.session.add(token)
+            db.session.add(token.user)
+            db.session.commit()
 
-        db.session.add(token)
-        db.session.add(token.user)
-        db.session.commit()
+            my_login_user(token.user)
 
-        my_login_user(token.user)
-
-        flash("Login successful", "info")
-
-        return token.user
+            return token.user
+        
+        return None
 
 
 class User(db.Model):
@@ -171,15 +195,15 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.Text, index=True)
     active = db.Column(db.Boolean, default=False)
-    current_token_id = db.Column(
-        db.Integer, db.ForeignKey("login_token.id"), nullable=True
+    current_login_token_guid = db.Column(
+        db.Text, db.ForeignKey("login_token.guid"), nullable=True
     )
 
     login_tokens = db.relationship(
         LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref="user"
     )
-    current_token = db.relationship(
-        LoginToken, primaryjoin=current_token_id == LoginToken.id, lazy="joined"
+    current_login_token = db.relationship(
+        LoginToken, primaryjoin=current_login_token_guid == LoginToken.guid, lazy="joined"
     )
 
     @classmethod
@@ -207,65 +231,86 @@ class User(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     user = User.query.get(user_id)
-    
+
     if not user:
         return None
 
-    elif "token_id" not in session:
+    elif "token_guid" not in session:
         return None
 
-    elif user.current_token_id != session["token_id"]:
+    elif user.current_login_token_guid != session["token_guid"]:
         flash("You have been logged of the session.")
-        del session["token_id"]
+        del session["token_guid"]
         return None
 
     return user
 
 
-class Integration(db.Model):
-    guid = db.Column(db.Text, primary_key=True)
-    github_oauth_state = db.Column(db.Text, index=True, nullable=False)
-    github_token = db.Column(db.Text, nullable=True)
-    repository_id = db.Column(db.BigInteger, unique=True, nullable=True)
-    trello_token = db.Column(db.Text, unique=True, nullable=True)
+class GithubIntegration(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    state = db.Column(db.Text, index=True, nullable=False)
+    token = db.Column(db.Text, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey(User.id), nullable=False)
-    
-    user = db.relationship(User, lazy="joined", backref="integrations")
+
+    user = db.relationship(
+        User, lazy="joined", backref=backref("github_integration", uselist=False)
+    )
+
+
+class GithubRepo(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    repo_id = db.Column(db.Integer, index=True, nullable=False, unique=True)
+    github_integration_id = db.Column(
+        db.Integer, db.ForeignKey(GithubIntegration.id), nullable=False
+    )
+
+    github_integration = db.relationship(
+        GithubIntegration, lazy="joined", backref="github_repos"
+    )
+
+
+class TrelloIntegration(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.Text, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey(User.id), nullable=False)
+
+    user = db.relationship(
+        User, lazy="joined", backref=backref("trello_integration", uselist=False)
+    )
 
 
 class IntegratedTrelloList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    integration_guid = db.Column(db.Text, db.ForeignKey(Integration.guid))
-    trello_list_id = db.Column(db.BigInteger, unique=True, index=True)
-    
-    integration = db.relationship(Integration, lazy="joined", backref="trello_lists")
+    list_id = db.Column(db.Text, nullable=False, unique=True)
+    integration_id = db.Column(
+        db.Integer, db.ForeignKey(TrelloIntegration.id), nullable=False
+    )
+
+    trello_integration = db.relationship(
+        TrelloIntegration, lazy="joined", backref="integrated_trello_lists"
+    )
 
 
 class PullRequestStatus(db.Model):
-    guid = db.Column(db.Text, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
     head_sha = db.Column(db.Text, index=True, nullable=False)
-    repository_id = db.Column(
-        db.BigInteger,
-        db.ForeignKey(Integration.repository_id),
-        index=True,
-        nullable=False,
+    repo_id = db.Column(
+        db.Integer, db.ForeignKey(GithubRepo.repo_id), index=True, nullable=False
     )
-    organisation = db.Column(db.Text)
-    repository = db.Column(db.Text)
     branch = db.Column(db.Text, index=True, nullable=False)
     status = db.Column(db.Text, nullable=False)  # should be an enum
     url = db.Column(db.Text, nullable=False)
-    integration_guid = db.Column(db.Text, db.ForeignKey(Integration.guid), nullable=False)
-    trello_list_id = db.Column(db.Text, index=True, nullable=True)
-
-    integration = db.relationship(Integration, primaryjoin=integration_guid == Integration.guid, lazy="joined", backref="pull_requests")
+    trello_list_id = db.Column(db.Text, db.ForeignKey(IntegratedTrelloList.list_id), index=True, nullable=True)
+    
+    github_repo = db.relationship(GithubRepo, lazy="joined", backref="pull_requests")
+    trello_list = db.relationship(IntegratedTrelloList, lazy="joined", backref="pull_requests")
 
     @classmethod
     def create_from_github(cls, data):
         if "pull_request" in data:
             data = data["pull_request"]
 
-            pr = PullRequestStatus.get(data["id"]).first()
+            pr = PullRequestStatus.query.get(data["id"])
 
             if not pr:
                 pr = PullRequestStatus(
@@ -291,12 +336,29 @@ class PullRequestStatus(db.Model):
         return requests.post(
             self.url,
             json={"state": state, "description": description, "context": context},
-            auth=("samuelhwilliams", os.environ["GITHUB_ACCESS_TOKEN"]),
+            params={"access_token": self.trello_list.trello_integration.user.github_integration.token},  # TODO: Finish implementing github repos
         )
+
+
+def get_github_client(user):
+    github_integration = GithubIntegration.query.filter(
+        GithubIntegration.user_id == current_user.id
+    ).one()
+    return GithubClient(TRELLO_API_KEY, github_integration)
+
+
+def get_trello_client(user):
+    trello_integration = TrelloIntegration.query.filter(
+        TrelloIntegration.user_id == current_user.id
+    ).one()
+    return TrelloClient(TRELLO_API_KEY, trello_integration)
 
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+    if request.method == "GET" and current_user.is_authenticated:
+        return redirect(url_for(".dashboard"))
+        
     form = LoginForm()
 
     if form.validate_on_submit():
@@ -318,69 +380,78 @@ def index():
         # mail.send(msg)
 
         flash("A login link has been emailed to you. Please click it within 5 minutes.")
-
+        
     return render_template("index.html", form=form)
 
 
 @app.route("/login/<payload>")
 def login(payload):
-    form = LoginForm()
     user = LoginToken.login_user(payload)
-    return redirect(url_for(".dashboard"))
+    if user:
+        return redirect(url_for(".dashboard"))
+    
+    return redirect(url_for(".index"))
 
 
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    integrations = Integration.query.filter(Integration.user_id == current_user.id).all()
-    return render_template("dashboard.html", integrations=integrations)
+    github_integration = GithubIntegration.query.filter(
+        GithubIntegration.user_id == current_user.id
+    ).first()
+    trello_integration = TrelloIntegration.query.filter(
+        TrelloIntegration.user_id == current_user.id
+    ).first()
+    return render_template(
+        "dashboard.html",
+        github_integration=github_integration,
+        trello_integration=trello_integration,
+    )
 
 
-@app.route("/integration/start-github")
+@app.route("/github/integration", methods=["GET", "POST"])
 @login_required
 def integrate_github():
+    # trello_card_urls = PullRequestStatus.find_trello_card_urls(request.json)
+    
+    if request.method == "POST":
+        github_integration = GithubIntegration(state=str(uuid.uuid4()), user_id=current_user.id)
+        db.session.add(github_integration)
+        db.session.commit()
+
+        session["github_integration_id"] = github_integration.id
+
+        return redirect(
+            GITHUB_OAUTH_URL.format(
+                client_id=GITHUB_CLIENT_ID,
+                redirect_uri="https://"
+                + os.environ["SERVER_NAME"]
+                + url_for(".github_authorization_complete"),
+                scope="repo:status",
+                state=github_integration.state,
+            )
+        )
+
     return render_template("integrate_github.html")
 
 
-@app.route('/integration/authorize-github', methods=["POST"])
-@login_required
-def authorize_github():
-    integration = Integration(
-        guid=str(uuid.uuid4()),
-        github_oauth_state=str(uuid.uuid4()),
-        user_id=current_user.id,
-    )
-    db.session.add(integration)
-    db.session.commit()
-    session["integration"] = integration.guid
-    
-    return redirect(
-        GITHUB_OAUTH_URL.format(
-            client_id=GITHUB_CLIENT_ID,
-            redirect_uri="https://" + os.environ["SERVER_NAME"] + url_for(".github_authorization_complete"),
-            scope="repo:status",
-            state=integration.github_oauth_state,
-        )
-    )
-    
-
-
-@app.route("/github/callback", methods=["GET", "POST"])
-def github_events():
-    # trello_card_urls = PullRequestStatus.find_trello_card_urls(request.json)
+@app.route("/github/integration/callback", methods=["POST"])
+def github_callback():
     print(request)
-    if request.json:
+    if request.method == "POST" and request.json:
         PullRequestStatus.create_from_github(request.json)
 
-    return jsonify(status="OK"), 200
 
-
-@app.route("/github/callback/complete")
+@app.route("/github/integration/complete")
 @login_required
 def github_authorization_complete():
-    integration = Integration.query.filter(
-        Integration.guid == session["integration"]
-    ).one()
+    github_integration = GithubIntegration.query.get(session["github_integration_id"])
+
+    if request.args["state"] != github_integration.state:
+        flash(
+            "Invalid state from GitHub authentication. Possible man-in-the-middle attempt. Process aborted."
+        )
+        return redirect(url_for(".dashboard"))
 
     response = requests.get(
         GITHUB_TOKEN_URL,
@@ -388,122 +459,46 @@ def github_authorization_complete():
             "client_id": GITHUB_CLIENT_ID,
             "client_secret": GITHUB_CLIENT_SECRET,
             "code": request.args["code"],
-            "state": integration.github_oauth_state,
+            "state": github_integration.state,
         },
         headers={"Accept": "application/json"},
     )
 
     if response.status_code == 200:
-        integration.github_token = response.json()["access_token"]
-        db.session.add(integration)
+        github_integration.token = response.json()["access_token"]
+        db.session.add(github_integration)
         db.session.commit()
         flash("GitHub integration successful.")
-        return redirect(url_for(".integrate_trello"))
+        return redirect(url_for(".dashboard"))
 
     flash("Something went wrong with integration?" + str(response))
     return redirect(url_for(".dashboard"))
 
 
-@app.route("/integration/start-trello")
-def integrate_trello():
-    authorize_form = AuthorizeTrelloForm()
-    return render_template("integrate_trello.html", authorize_form=authorize_form)
+@app.route("/trello/integration", methods=["HEAD"])
+def integrate_trello_head():
+    return jsonify(status="OK"), 200
 
 
-@app.route("/trello/authorize", methods=["POST"])
-def authorize_trello():
-    personalized_authorize_url = "{authorize_url}?expiration={expiration}&scope={scope}&name={name}&response_type=token&key={key}".format(
-        authorize_url=TRELLO_AUTHORIZE_URL,
-        expiration="1day",
-        scope="read,write",
-        name="github-signoff",
-        key=os.environ["TRELLO_API_KEY"],
-    )
-    return redirect(personalized_authorize_url)
-
-
-@app.route("/trello/authorize/finish", methods=["POST"])
-@login_required
-def authorize_trello_finish():
-    form = AuthorizeTrelloForm()
-
-    if form.validate_on_submit():
-        integration = Integration.query.filter(Integration.user_id == current_user.id).one()
-        integration.trello_token = form.trello_auth_key.data
-        db.session.add(integration)
-        db.session.commit()
-        flash("Authorization complete.", "info")
-        return redirect(url_for(".choose_trello_board")), 200
-
-    flash("Form submit failed", "error")
-    return redirect(url_for(".index")), 400
-
-
-@app.route("/trello/choose-board")
-@login_required
-def choose_trello_board():
-    integration = Integration.query.filter(Integration.user_id == current_user.id).one()
-    trello_client = TrelloClient(TRELLO_API_KEY, integration.trello_token)
-
-    board_form = ChooseTrelloBoardForm(trello_client.get_boards())
-
-    return render_template("trello-select-board.html", board_form=board_form)
-
-
-@app.route("/trello/choose-list", methods=["POST"])
-@login_required
-def choose_trello_list():
-    integration = Integration.query.filter(Integration.user_id == current_user.id).one()
-    trello_client = TrelloClient(TRELLO_API_KEY, integration.trello_token)
-    
-    board_form = ChooseTrelloBoardForm()
-
-    list_form = ChooseTrelloListForm(
-        trello_client.get_lists(board_id=board_form.board_choice.data)
-    )
-
-    return render_template("trello-select-list.html", list_form=list_form)
-
-
-@app.route("/trello/create-webhook", methods=["POST"])
-@login_required
-def create_trello_webhook():
-    integration = Integration.query.filter(Integration.user_id == current_user.id).one()
-    trello_client = TrelloClient(TRELLO_API_KEY, integration.trello_token)
-
-    list_form = ChooseTrelloListForm()
-
-    trello_client.create_webhook(
-        object_id=list_form.list_choice.data,
-        callback_url=f"{SERVER_NAME}{url_for('trello_callback', integration_guid=integration.guid)}",
-    )
-    
-    integrated_trello_list = IntegratedTrelloList(
-        integration_guid=integration.guid,
-        trello_list_id=list_form.list_choice.data,
-    )
-    
-    db.session.add(integrated_trello_list)
-    db.session.commit()
-
-    flash("You have successfully integrated with Trello", "info")
-    return redirect(url_for(".index")), 201
-
-
-@app.route("/trello/callback", methods=["HEAD", "POST"])
-@login_required
+@app.route("/trello/integration", methods=["POST"])
 def trello_callback():
-    if request.method == "POST":
-        data = json.loads(request.get_data(as_text=True))
-        if data.get("action", {}).get("type") == "updateCard":
+    data = json.loads(request.get_data(as_text=True))
+    if data.get("action", {}).get("type") == "updateCard":
+        try:
             integrated_trello_list = IntegratedTrelloList.query.filter(
-                IntegratedTrelloList.trello_list_id
+                IntegratedTrelloList.list_id
                 == data["action"]["data"]["listAfter"]["id"]
             ).one()
-            
-            print(integrated_trello_list.integration.pull_requests)
-            
-            trello_client = TrelloClient(TRELLO_API_KEY, integrated_trello_list.integration.trello_token)
+        
+        except NoResultFound as e:
+            logger.error(str(e))
+            logger.error(data)
+        
+        else:
+            trello_client = TrelloClient(TRELLO_API_KEY, integrated_trello_list.trello_integration)
+
+            pull_requests = integrated_trello_list.pull_requests
+            print(pull_requests)
 
             if pull_requests:
                 for pull_request in pull_requests:
@@ -514,6 +509,110 @@ def trello_callback():
                     )
 
     return jsonify(status="OK"), 200
+
+
+@app.route("/trello/integration", methods=["GET"])
+@login_required
+def integrate_trello():
+    authorize_form = AuthorizeTrelloForm()
+    return render_template("integrate_trello.html", authorize_form=authorize_form)
+
+
+@app.route("/trello/integration/authorize", methods=["POST"])
+@login_required
+def authorize_trello():
+    trello_integration = TrelloIntegration.query.filter(
+        TrelloIntegration.user_id == current_user.id
+    ).first()
+    if trello_integration:
+        abort(400, "Already have an integration token for Trello")
+
+    personalized_authorize_url = "{authorize_url}?expiration={expiration}&scope={scope}&name={name}&response_type=token&key={key}".format(
+        authorize_url=TRELLO_AUTHORIZE_URL, **TRELLO_TOKEN_SETTINGS
+    )
+    return redirect(personalized_authorize_url)
+
+
+@app.route("/trello/integration/complete", methods=["POST"])
+@login_required
+def authorize_trello_complete():
+    form = AuthorizeTrelloForm()
+
+    if form.validate_on_submit():
+        trello_integration = TrelloIntegration.query.filter(
+            TrelloIntegration.user_id == current_user.id
+        ).first()
+        if trello_integration:
+            abort(400, "Already have an integration token for Trello")
+
+        trello_integration = TrelloIntegration()
+        trello_integration.token = form.trello_integration.data
+        trello_integration.user_id = current_user.id
+        db.session.add(trello_integration)
+        db.session.commit()
+
+        flash("Authorization complete.", "info")
+        return redirect(url_for(".choose_trello_board")), 200
+
+    flash("Form submit failed", "error")
+    return redirect(url_for(".index")), 400
+
+
+@app.route("/trello/choose-board")
+@login_required
+def choose_trello_board():
+    trello_client = get_trello_client(current_user)
+    board_form = ChooseTrelloBoardForm(trello_client.get_boards())
+
+    return render_template("trello-select-board.html", board_form=board_form)
+
+
+@app.route("/trello/choose-list", methods=["POST"])
+@login_required
+def choose_trello_list():
+    trello_client = get_trello_client(current_user)
+    
+    list_form = ChooseTrelloListForm(
+        trello_client.get_lists(board_id=ChooseTrelloBoardForm().board_choice.data)
+    )
+
+    return render_template("trello-select-list.html", list_form=list_form)
+
+
+@app.route("/trello/create-webhook", methods=["POST"])
+@login_required
+def create_trello_webhook():
+    trello_client = get_trello_client(current_user)
+
+    list_form = ChooseTrelloListForm()
+
+    trello_client.create_webhook(
+        object_id=list_form.list_choice.data,
+        callback_url=f"{SERVER_NAME}{url_for('.integrate_trello', integration_id=trello_client.integration.id)}",
+    )
+
+    integrated_trello_list = IntegratedTrelloList(
+        integration_id=trello_client.integration.id, list_id=list_form.list_choice.data
+    )
+
+    db.session.add(integrated_trello_list)
+    db.session.commit()
+
+    flash("You have created a new webhook monitoring the “{product_list}” Trello list.", "info")
+    return redirect(url_for(".index")), 201
+
+
+@app.route("/trello/revoke", methods=["POST"])
+@login_required
+def revoke_trello():
+    trello_client = get_trello_client(current_user)
+    trello_client.revoke_integration()
+    
+    TrelloIntegration.query.filter(TrelloIntegration.user_id == current_user.id).delete()
+    db.session.commit()
+    
+    return redirect(url_for(".dashboard"))
+    
 
 
 if __name__ == "__main__":

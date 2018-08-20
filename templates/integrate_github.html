@@ -3,7 +3,7 @@
 {% block title %}New integration{% endblock %}
 
 {% block content %}
-<form method="POST" action="{{ url_for('.authorize_github') }}" onsubmit="document.getElementById('authorize-github').disabled = true;">
+<form method="POST" action="{{ url_for('.integrate_github') }}" onsubmit="document.getElementById('authorize-github').disabled = true;">
   <input type="submit" id="authorize-github" value="Authorize Github">
 </form>
 {% endblock %}

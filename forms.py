@@ -8,7 +8,7 @@ class LoginForm(FlaskForm):
 
 
 class AuthorizeTrelloForm(FlaskForm):
-    trello_auth_key = StringField(
+    trello_integration = StringField(
         label="Trello Authorization Token", validators=[DataRequired()]
     )
 

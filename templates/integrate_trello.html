@@ -7,9 +7,9 @@
   <input type="submit" id="authorize-trello" value="Authorize Trello">
 </form>
 
-<form method="POST" action="{{ url_for('.authorize_trello_finish') }}" onsubmit="document.getElementById('authorize-trello-finish').disabled = true;" enctype="multipart/form-data">
+<form method="POST" action="{{ url_for('.authorize_trello_complete') }}" onsubmit="document.getElementById('authorize-trello-finish').disabled = true;" enctype="multipart/form-data">
   {{ authorize_form.csrf_token }}
-  {{ authorize_form.trello_auth_key() }}
+  {{ authorize_form.trello_integration() }}
   <input type="submit" value="Complete Authorization">
 </form>
 {% endblock %}

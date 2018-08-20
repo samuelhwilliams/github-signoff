@@ -1,4 +1,4 @@
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
 import requests
 
@@ -6,12 +6,13 @@ import requests
 class TrelloClient:
     TRELLO_API_ROOT = "https://api.trello.com/1"
 
-    def __init__(self, key, token):
+    def __init__(self, key, integration):
         self.key = key
-        self.token = token
+        self.integration = integration
+        self._token = self.integration.token
 
     def _default_params(self):
-        return {"key": self.key, "token": self.token}
+        return {"key": self.key, "token": self._token}
 
     def _request(self, method, path, params=None):
         if params is None:
@@ -19,6 +20,7 @@ class TrelloClient:
 
         params = {**self._default_params(), **params}
 
+        print(f"{TrelloClient.TRELLO_API_ROOT}/{path}?" + urlencode(params))
         response = requests.request(
             method=method, url=f"{TrelloClient.TRELLO_API_ROOT}/{path}", params=params
         )
@@ -30,6 +32,9 @@ class TrelloClient:
 
     def _post(self, path, params=None):
         return self._request("post", path, params)
+
+    def _delete(self, path, params=None):
+        return self._request("delete", path, params)
 
     def _me(self):
         return self._get("members/me")
@@ -58,7 +63,7 @@ class TrelloClient:
         self,
         object_id,
         callback_url,
-        description="github-signoff-callback",
+        description="product-signoff-callback",
         active=True,
     ):
         response = self._post(
@@ -71,4 +76,9 @@ class TrelloClient:
             },
         )
 
+        print(response)
+
         return response
+
+    def revoke_integration(self):
+        return self._delete(f"/tokens/{self._token}")

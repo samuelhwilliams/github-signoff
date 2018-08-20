@@ -4,16 +4,26 @@
 {% block content %}
 <h1>Integration dashboard</h1>
 <div>
+  <p>Authorized with GitHub? {% if github_integration %}Yes{% else %}No{% endif %}</p>
+  {% if not github_integration %}
+  <p>
   <a href="{{ url_for('.integrate_github') }}">
-    Authorize integration with GitHub and Trello
+    Authorize access to GitHub
   </a>
-</div>
-<div>
-  <p>Existing integrations:</p>
-  <ul>
-    {% for integration in integrations %}
-    <li>{{ integration.guid }}: {{ integration.repository_id }}</li>
-    {% endfor %}
-  </ul>
+  </p>
+  {% endif %}
+  
+  <p>Authorized with Trello? {% if trello_integration %}Yes{% else %}No{% endif %}</p>
+  <p>
+  {% if not trello_integration %}
+  <a href="{{ url_for('.integrate_trello') }}">
+    Authorize access to Trello
+  </a>
+  {% else %}
+  <form method="POST" action="{{ url_for('.revoke_trello') }}">
+    <input type="submit" value="Revoke access">
+  </form>
+  {% endif %}
+  </p>
 </div>
 {% endblock %}
