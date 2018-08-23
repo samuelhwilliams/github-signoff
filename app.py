@@ -20,6 +20,7 @@ from flask_login import (
     login_required,
     current_user,
 )
+
 # from flask_mail import Mail, Message
 from flask_sqlalchemy import SQLAlchemy
 from notifications_python_client.notifications import NotificationsAPIClient
@@ -39,6 +40,7 @@ app = Flask(__name__, template_folder="templates")
 app.config["NOTIFY_TEMPLATE_LOGIN_LINK"] = "aa07a6f4-0b7b-4101-9184-cc7f0ad620cc"
 app.config["NOTIFY_API_KEY"] = os.environ["NOTIFY_API_KEY"]
 
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
 app.config["PREFERRED_URL_SCHEME"] = "https"
 app.config["SECRET_KEY"] = os.environ["SECRET_KEY"].encode("utf8")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:////tmp/flask_app.db")
@@ -63,6 +65,7 @@ APP_NAME = "product-signoff"
 
 # mail = Mail(app)
 login_manager = LoginManager(app)
+login_manager.login_view = ".login"
 
 AWAITING_PRODUCT_REVIEW = "Awaiting product signoff"
 TICKET_APPROVED_BY = "Product signoff has been received"
@@ -222,12 +225,14 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.Text, index=True)
     active = db.Column(db.Boolean, default=False)
-    current_login_token_guid = db.Column(db.Text, db.ForeignKey("login_token.guid"), nullable=True)
+    current_login_token_guid = db.Column(db.Text, db.ForeignKey(LoginToken.guid), nullable=True)
     github_state = db.Column(db.Text, nullable=True)
     github_token = db.Column(db.Text, nullable=True)
     trello_token = db.Column(db.Text, nullable=True)
 
-    login_tokens = db.relationship(LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref="user")
+    login_tokens = db.relationship(
+        LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref=backref("user")
+    )
     current_login_token = db.relationship(
         LoginToken, primaryjoin=current_login_token_guid == LoginToken.guid, lazy="joined"
     )
@@ -296,6 +301,7 @@ class PullRequestStatus(db.Model):
         pull_request = cls.query.get(id_)
         if pull_request:
             logging.debug(f"Found existing pull request {pull_request}")
+            pull_request.sha = sha
             return pull_request
 
         if not github_repo:
@@ -306,13 +312,10 @@ class PullRequestStatus(db.Model):
 
         return pull_request
 
-    def refresh_for_card(self, card_id):
-        print(f"Refreshing PR {self} for {card_id}")
-
 
 class TrelloList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    list_id = db.Column(db.Integer, index=True, nullable=False)
+    list_id = db.Column(db.Text, index=True, nullable=False)
     hook_id = db.Column(db.Text, index=False, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey(User.id), index=True, nullable=False)
 
@@ -334,7 +337,9 @@ class TrelloCard(db.Model):
     card_id = db.Column(db.Text, index=True, nullable=False)
     pull_request_id = db.Column(db.Integer, db.ForeignKey(PullRequestStatus.id), index=True, nullable=False)
 
-    pull_request = db.relationship(PullRequestStatus, lazy="joined", backref="trello_cards")
+    pull_request = db.relationship(
+        PullRequestStatus, lazy="joined", backref="trello_cards"
+    )
 
     __table_args__ = (db.UniqueConstraint(card_id, pull_request_id, name="uix_card_id_pull_request_id"),)
 
@@ -363,7 +368,7 @@ class Updater:
         self.trello_client = get_trello_client(user)
 
     def _set_pull_request_status(self, pull_request, status):
-        description = TICKET_APPROVED_BY if status else AWAITING_PRODUCT_REVIEW
+        description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
         response = self.github_client.set_pull_request_status(
             repo_fullname=pull_request.repo.fullname,
             sha=pull_request.sha,
@@ -384,13 +389,11 @@ class Updater:
         # Old cards - need to remove
         for card_id in existing_trello_card_ids - all_trello_card_ids:
             old_trello_card = TrelloCard.query.filter(TrelloCard.card_id == card_id).one()
-            print(f'deleting {card_id}')
             db.session.delete(old_trello_card)
 
         # New cards - need to create
         for card_id in all_trello_card_ids - existing_trello_card_ids:
             new_trello_card = TrelloCard(card_id=card_id, pull_request_id=pull_request.id)
-            print(f'adding {card_id}')
             db.session.add(new_trello_card)
 
     def sync_pull_request(self, id_, sha, body, github_repo):
@@ -459,24 +462,6 @@ class Updater:
             else:
                 self._set_pull_request_status(pull_request=trello_card.pull_request, status=StatusEnum.SUCCESS.value)
 
-    def sync(self):
-        if self.pull_request:
-            pass
-        elif self.trello_card:
-            pass
-        else:
-            raise ValueError("No pull request or trello card assigned?")
-
-        if trello_ticket:
-            trello_ticket_signed_off = TrelloList.query.filter(
-                TrelloList.user_id == pull_request.user.id,
-                TrelloList.list_id == trello_client.get_card_list(os.path.basename(trello_ticket))["id"],
-            ).first()
-
-            pull_request.status = StatusEnum.SUCCESS.value if trello_ticket_signed_off else StatusEnum.PENDING.value
-            db.session.add(pull_request)
-            db.session.commit()
-
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -493,12 +478,12 @@ def index():
             db.session.commit()
 
         token = LoginToken.create_token(user)
-        
+
         notifications_client = NotificationsAPIClient(app.config["NOTIFY_API_KEY"])
         notifications_client.send_email_notification(
             email_address=form.email.data,
             template_id=app.config["NOTIFY_TEMPLATE_LOGIN_LINK"],
-            personalisation={'login_link': url_for('.login', payload=token.payload, _external=True)},
+            personalisation={"login_link": url_for(".login", payload=token.payload, _external=True)},
         )
 
         flash("A login link has been emailed to you. Please click it within 5 minutes.")
