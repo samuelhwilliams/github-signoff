@@ -1,6 +1,6 @@
 import requests
 
-from errors import GithubUnauthorized
+from app.errors import GithubUnauthorized
 
 
 class GithubClient:

@@ -1,5 +1,6 @@
 import requests
-from errors import TrelloUnauthorized, HookAlreadyExists
+
+from app.errors import TrelloUnauthorized, HookAlreadyExists
 
 
 class TrelloClient:
