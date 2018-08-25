@@ -1,3 +1,7 @@
+from app.github import GithubClient
+from app.trello import TrelloClient
+
+
 def coerce_boolean_or_error(key, value):
     if isinstance(value, bool):
         return value
@@ -20,12 +24,14 @@ def coerce_int_or_error(key, value):
         raise ValueError("{} must be an integer".format(key))
 
 
-def get_github_client(user):
-    return GithubClient(client_id=GITHUB_CLIENT_ID, client_secret=GITHUB_CLIENT_SECRET, user=user)
+def get_github_client(app, user):
+    return GithubClient(
+        client_id=app.config["GITHUB_CLIENT_ID"], client_secret=app.config["GITHUB_CLIENT_SECRET"], user=user
+    )
 
 
-def get_trello_client(user):
-    return TrelloClient(key=TRELLO_API_KEY, user=user)
+def get_trello_client(app, user):
+    return TrelloClient(key=app.config["TRELLO_API_KEY"], user=user)
 
 
 def find_trello_card_ids_in_text(text):

@@ -13,7 +13,7 @@ from app.errors import TrelloUnauthorized, GithubUnauthorized
 
 def create_app():
     app = Flask(__name__, template_folder="templates")
-    app.config.from_object(config_map[os.environ.get("APP_ENVIRONMENT", "development")])
+    app.config.from_object(config_map[os.environ.get("FLASK_ENV", "development")])
 
     db.init_app(app)
 

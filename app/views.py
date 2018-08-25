@@ -1,3 +1,6 @@
+import logging
+import uuid
+
 from flask import (
     Blueprint,
     Flask,
@@ -14,6 +17,7 @@ from flask import (
 from flask_login import LoginManager, current_user, login_required
 from flask_login import login_user as _login_user
 from flask_login import logout_user as _logout_user
+from sqlalchemy.orm.exc import NoResultFound
 
 from notifications_python_client.notifications import NotificationsAPIClient
 
@@ -27,18 +31,25 @@ from app.trello import TrelloClient
 from app.updater import Updater
 from app.utils import get_github_client, get_trello_client
 
+
 main_blueprint = Blueprint("main", "main")
+logger = logging.getLogger(__name__)
 
 
 @main_blueprint.route("/", methods=["GET", "POST"])
-def index():
+def start_page():
     if request.method == "GET" and current_user.is_authenticated:
         return redirect(url_for(".dashboard"))
 
-    form = LoginForm()
+    return render_template("start-page.html")
 
-    if form.validate_on_submit():
-        user = User.find_or_create(form.email.data)
+
+@main_blueprint.route("/login", methods=["GET", "POST"])
+def login():
+    login_form = LoginForm()
+
+    if login_form.validate_on_submit():
+        user = User.find_or_create(login_form.email.data)
         if user.active:
             user.active = False
         db.session.add(user)
@@ -47,31 +58,31 @@ def index():
 
         # notifications_client = NotificationsAPIClient(current_app.config["NOTIFY_API_KEY"])
         # notifications_client.send_email_notification(
-        #     email_address=form.email.data,
+        #     email_address=login_form.email.data,
         #     template_id=current_app.config["NOTIFY_TEMPLATE_LOGIN_LINK"],
         #     personalisation={"login_link": url_for(".login", payload=payload, _external=True)},
         # )
 
         print(
-            form.email.data,
+            login_form.email.data,
             current_app.config["NOTIFY_TEMPLATE_LOGIN_LINK"],
-            {"login_link": url_for(".login", payload=payload, _external=True)},
+            {"login_link": url_for(".login_with_payload", payload=payload, _external=True)},
         )
 
         db.session.commit()
 
-        flash("A login link has been emailed to you. Please click it within 5 minutes.")
+        return render_template("login_sent.html", email_address=login_form.email.data)
 
-    return render_template("index.html", form=form)
+    return render_template("login.html", login_form=login_form)
 
 
-@main_blueprint.route("/login/<payload>")
-def login(payload):
+@main_blueprint.route("/login/<payload>", methods=["GET", "POST"])
+def login_with_payload(payload):
     user = login_user(current_app, db, payload)
     if user:
         return redirect(url_for(".dashboard"))
 
-    return redirect(url_for(".index"))
+    return redirect(url_for(".start_page"))
 
 
 @main_blueprint.route("/dashboard")
@@ -80,12 +91,12 @@ def dashboard():
     github_integrated, trello_integrated = current_user.github_token is not None, current_user.trello_token is not None
 
     if github_integrated:
-        github_client = get_github_client(current_user)
+        github_client = get_github_client(current_app, current_user)
         if github_client.is_token_valid() is False:
             flash("Your GitHub token may no longer be valid. Please revoke and re-authorize.", "warning")
 
     if trello_integrated:
-        trello_client = get_trello_client(current_user)
+        trello_client = get_trello_client(current_app, current_user)
         if trello_client.is_token_valid() is False:
             flash("Your Trello token may no longer be valid. Please revoke and re-authorize.", "warning")
 
@@ -112,10 +123,10 @@ def integrate_github():
         db.session.commit()
 
         return redirect(
-            GITHUB_OAUTH_URL.format(
+            current_app.config["GITHUB_OAUTH_URL"].format(
                 redirect_uri=url_for(".github_authorization_complete"),
                 state=current_user.github_state,
-                **GITHUB_OAUTH_SETTINGS,
+                **current_app.config["GITHUB_OAUTH_SETTINGS"],
             )
         )
 
@@ -137,7 +148,7 @@ def github_callback():
         logger.warning(f"Callback received but no repository registered in database: {repo_fullname}")
         return jsonify(status="OK"), 200
 
-    updater = Updater(db, github_repo.user)
+    updater = Updater(app, db, github_repo.user)
     updater.sync_pull_request(
         id_=payload["id"], sha=payload["head"]["sha"], body=payload["body"], github_repo=github_repo
     )
@@ -177,15 +188,15 @@ def github_authorization_complete():
 @main_blueprint.route("/github/choose-repos", methods=["GET", "POST"])
 @login_required
 def github_choose_repos():
-    github_client = get_github_client(current_user)
+    github_client = get_github_client(current_app, current_user)
     repo_form = ChooseGithubRepoForm(github_client.get_repos())
 
     if repo_form.validate_on_submit():
-        github_client = get_github_client(current_user)
+        github_client = get_github_client(current_app, current_user)
         repo_choices = dict(repo_form.repo_choice.choices)  # refactor
         chosen_repo_fullnames = {repo_choices.get(repo_choice) for repo_choice in repo_form.repo_choice.data}
 
-        updater = Updater(db, current_user)
+        updater = Updater(app, db, current_user)
         updater.sync_repositories(chosen_repo_fullnames)
 
         return redirect(url_for(".dashboard"))
@@ -199,7 +210,7 @@ def github_choose_repos():
 @main_blueprint.route("/github/revoke", methods=["POST"])
 @login_required
 def revoke_github():
-    github_client = get_github_client(current_user)
+    github_client = get_github_client(current_app, current_user)
     if github_client.revoke_integration() is False:
         flash(
             (
@@ -229,7 +240,7 @@ def trello_callback():
     if data.get("action", {}).get("type") == "updateCard":
         trello_cards = TrelloCard.query.filter(TrelloCard.card_id == data["action"]["data"]["card"]["shortLink"]).all()
         if trello_cards:
-            updater = Updater(db, trello_cards[0].pull_request.user)
+            updater = Updater(app, db, trello_cards[0].pull_request.user)
             updater.sync_trello_card(trello_cards)
 
     return jsonify(status="OK"), 200
@@ -250,7 +261,7 @@ def authorize_trello():
 
     personalized_authorize_url = (
         "{authorize_url}?expiration={expiration}&scope={scope}&name={name}&response_type=token&key={key}"
-    ).format(authorize_url=TRELLO_AUTHORIZE_URL, **TRELLO_TOKEN_SETTINGS)
+    ).format(authorize_url=current_app.config["TRELLO_AUTHORIZE_URL"], **current_app.config["TRELLO_TOKEN_SETTINGS"])
     return redirect(personalized_authorize_url)
 
 
@@ -271,13 +282,13 @@ def authorize_trello_complete():
         return redirect(url_for(".dashboard"))
 
     flash("Form submit failed", "error")
-    return redirect(url_for(".index"))
+    return redirect(url_for(".start_page"))
 
 
 @main_blueprint.route("/trello/revoke", methods=["POST"])
 @login_required
 def revoke_trello():
-    trello_client = get_trello_client(current_user)
+    trello_client = get_trello_client(current_app, current_user)
     if trello_client.revoke_integration() is False:
         flash(
             "Something went wrong revoking your Trello integration. Please do it directly from your Trello account.",
@@ -294,7 +305,7 @@ def revoke_trello():
 @main_blueprint.route("/trello/choose-board", methods=["GET", "POST"])
 @login_required
 def trello_choose_board():
-    trello_client = get_trello_client(current_user)
+    trello_client = get_trello_client(current_app, current_user)
     board_form = ChooseTrelloBoardForm(trello_client.get_boards())
 
     if board_form.validate_on_submit():
@@ -310,7 +321,7 @@ def trello_choose_list():
         flash("Please select a Trello board.")
         return redirect(".trello_choose_board")
 
-    trello_client = get_trello_client(current_user)
+    trello_client = get_trello_client(current_app, current_user)
 
     list_form = ChooseTrelloListForm(trello_client.get_lists(board_id=request.args["board_id"]))
 

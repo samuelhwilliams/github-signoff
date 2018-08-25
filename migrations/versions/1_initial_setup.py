@@ -24,7 +24,6 @@ def upgrade():
         sa.Column("fullname", sa.Text(), nullable=False),
         sa.Column("hook_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_github_repo_fullname"), "github_repo", ["fullname"], unique=False)
@@ -36,7 +35,6 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("expires_at", sa.DateTime(), nullable=False),
         sa.Column("consumed_at", sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("guid"),
     )
     op.create_index(op.f("ix_login_token_user_id"), "login_token", ["user_id"], unique=False)
@@ -47,8 +45,6 @@ def upgrade():
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("repo_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["repo_id"], ["github_repo.id"]),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -56,7 +52,6 @@ def upgrade():
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("card_id", sa.Text(), nullable=False),
         sa.Column("pull_request_id", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["pull_request_id"], ["pull_request_status.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("card_id", "pull_request_id", name="uix_card_id_pull_request_id"),
     )
@@ -68,7 +63,6 @@ def upgrade():
         sa.Column("list_id", sa.Text(), nullable=False),
         sa.Column("hook_id", sa.Text(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_trello_list_list_id"), "trello_list", ["list_id"], unique=False)
@@ -82,10 +76,21 @@ def upgrade():
         sa.Column("github_state", sa.Text(), nullable=True),
         sa.Column("github_token", sa.Text(), nullable=True),
         sa.Column("trello_token", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(["current_login_token_guid"], ["login_token.guid"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_user_email"), "user", ["email"], unique=False)
+
+    op.create_foreign_key("fk_github_repo_user", "github_repo", "user", ["user_id"], ["id"])
+    op.create_foreign_key("fk_login_token_user", "login_token", "user", ["user_id"], ["id"])
+    op.create_foreign_key("fk_pull_request_status_user", "pull_request_status", "user", ["user_id"], ["id"])
+    op.create_foreign_key(
+        "fk_pull_request_status_github_repo", "pull_request_status", "github_repo", ["repo_id"], ["id"]
+    )
+    op.create_foreign_key(
+        "fk_trello_card_pull_request_status", "trello_card", "pull_request_status", ["pull_request_id"], ["id"]
+    )
+    op.create_foreign_key("fk_trello_list_user", "trello_list", "user", ["user_id"], ["id"])
+    op.create_foreign_key("fk_user_current_login_token", "user", "login_token", ["current_login_token_guid"], ["guid"])
     # ### end Alembic commands ###
 
 

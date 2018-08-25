@@ -1,53 +1,80 @@
 {% extends '_base.html' %}
 {% block title %}Dashboard{% endblock%}
 
-{% block content %}
-<h1>Dashboard</h1>
-<div>
-  <h2>GitHub</h2>
-  {% if not github_integrated %}
-  <p>
-  <a href="{{ url_for('.integrate_github') }}">
-    Authorize access to GitHub
-  </a>
-  </p>
-  {% else %}
-  <a href="{{ url_for('.github_choose_repos') }}">Choose monitored repositories</a>
-  <form method="POST" action="{{ url_for('.revoke_github') }}">
-    <input type="submit" value="Revoke access">
-  </form>
-  {% endif %}
-  
-  <h2>Trello</h2>
-  {% if not trello_integrated %}
-  <p>
-  <a href="{{ url_for('.integrate_trello') }}">
-    Authorize access to Trello
-  </a>
-  </p>
-  {% else %}
-  <a href="{{ url_for('.trello_choose_board') }}">Choose monitored Trello lists</a>
-  <form method="POST" action="{{ url_for('.revoke_trello') }}">
-    <input type="submit" value="Revoke access">
-  </form>
-  {% endif %}
-  
-  {% if github_repos %}
-  <h2>Linked to the following GitHub repositories:</h2>
-  <ul>
-  {% for github_repo in github_repos %}
-  <li>{{ github_repo.fullname }}</li>
-  {% endfor %}
-  </ul>
-  {% endif %}
-  
-  {% if trello_lists %}
-  <h2>Linked to the following Trello lists:</h2>
-  <ul>
-  {% for trello_list in trello_lists %}
-  <li>“{{ trello_list.list_name }}” list on the “{{ trello_list.board_name }}” board</li>
-  {% endfor %}
-  </ul>
-  {% endif %}
+{% block main %}
+<div class="govuk-grid-row">
+<div class="govuk-grid-column-two-thirds">
+  <h1 class="govuk-heading-xl">Powerup dashboard</h1>
+  <div>
+    <ol class="app-task-list">
+      <li>
+        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">1. </span>Authorize external services</h2>
+        <ul class="app-task-list__items">
+          <li class="app-task-list__item">
+            <a href="{{ url_for('.integrate_github') }}">
+              Create authorization for GitHub
+            </a>
+            {% if github_integrated %}
+            <strong class="govuk-tag app-task-list__task-state" id="eligibility-completed">Completed</strong>
+            {% endif %}
+          </li>
+          <li class="app-task-list__item">
+            <a class="govuk-link" href="{{ url_for('.integrate_trello') }}">
+              Create authorization for Trello
+            </a>
+            {% if trello_integrated %}
+            <strong class="govuk-tag app-task-list__task-state" id="eligibility-completed">Completed</strong>
+            {% endif %}
+          </li>
+        </ul>
+      </li>
+      <li>
+        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">2. </span>Configure settings for your team</h2>
+        <ul class="app-task-list__items">
+          <li class="app-task-list__item">
+            <a class="govuk-link" href="{{ url_for('.github_choose_repos') }}">Select your team's code repositories</a>
+          </li>
+          <li class="app-task-list__item">
+            <a class="govuk-link" href="{{ url_for('.integrate_trello') }}">Attach pull requests to Trello cards</a>
+            <strong class="govuk-tag app-task-list__task-state" id="eligibility-completed">Enabled</strong>
+          </li>
+          <li class="app-task-list__item">
+            <a class="govuk-link" href="{{ url_for('.integrate_trello') }}">Attach “product signoff” checks to pull requests</a>
+            <strong class="govuk-tag app-tag--disabled app-task-list__task-state" id="eligibility-completed">Disabled</strong>
+          </li>
+        </ul>
+      </li>
+    </ol>
+    
+    
+    <a class="govuk-link" href="{{ url_for('.github_choose_repos') }}">Choose monitored repositories</a>
+    <form method="post" action="{{ url_for('.revoke_github') }}">
+      <input type="submit" value="Revoke access">
+    </form>
+    
+    <a class="govuk-link" href="{{ url_for('.trello_choose_board') }}">Choose monitored Trello lists</a>
+    <form method="POST" action="{{ url_for('.revoke_trello') }}">
+      <input type="submit" value="Revoke access">
+    </form>
+    
+    {% if github_repos %}
+    <h2 class="govuk-heading-l">Linked to the following GitHub repositories:</h2>
+    <ul>
+    {% for github_repo in github_repos %}
+    <li>{{ github_repo.fullname }}</li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+    
+    {% if trello_lists %}
+    <h2 class="govuk-heading-l">Linked to the following Trello lists:</h2>
+    <ul>
+    {% for trello_list in trello_lists %}
+    <li>“{{ trello_list.list_name }}” list on the “{{ trello_list.board_name }}” board</li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
 </div>
 {% endblock %}

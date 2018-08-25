@@ -1,0 +1,9 @@
+.app-tag--enabled {
+    @extend .govuk-tag;
+    background-color: govuk-colour("green");
+}
+
+.app-tag--disabled {
+    @extend .govuk-tag;
+    background-color: govuk-colour("grey-2");
+}

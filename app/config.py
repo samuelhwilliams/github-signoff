@@ -12,8 +12,10 @@ class Config:
     SERVER_NAME = os.environ.get("SERVER_NAME", "localhost:5000")
 
     PERMANENT_SESSION_LIFETIME = timedelta(hours=1)
+    SESSION_REFRESH_EACH_REQUEST = True
+
     PREFERRED_URL_SCHEME = "https"
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:////tmp/flask_app.db")
+    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "postgresql://localhost/product_signoff")
     SQLALCHEMY_ECHO = False
     CSRF_ENABLED = True
 

@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 
 
 class Updater:
-    def __init__(self, db, user):
+    def __init__(self, app, db, user):
         self.db = db
         self.user = user
-        self.github_client = get_github_client(user)
-        self.trello_client = get_trello_client(user)
+        self.github_client = get_github_client(app, user)
+        self.trello_client = get_trello_client(app, user)
 
     def _set_pull_request_status(self, pull_request, status):
         description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW

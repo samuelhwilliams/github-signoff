@@ -1,8 +1,14 @@
 from datetime import datetime, timedelta
+import uuid
 
 from sqlalchemy.orm import backref
 
 from app import db
+
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class LoginToken(db.Model):
@@ -54,6 +60,7 @@ class User(db.Model):
 
 
 class GithubRepo(db.Model):
+    __tablename__ = "github_repo"
     id = db.Column(db.Integer, primary_key=True)
     fullname = db.Column(db.Text, index=True, nullable=False)
     hook_id = db.Column(db.Integer, index=False, nullable=False)
@@ -63,6 +70,7 @@ class GithubRepo(db.Model):
 
 
 class PullRequestStatus(db.Model):
+    __tablename__ = "pull_request_status"
     id = db.Column(db.Integer, primary_key=True)
     sha = db.Column(db.Text, nullable=False)
     status = db.Column(db.Text, nullable=False)  # should be an enum
@@ -76,7 +84,7 @@ class PullRequestStatus(db.Model):
     def get_or_create(cls, id_, sha, github_repo, user):
         pull_request = cls.query.get(id_)
         if pull_request:
-            logging.debug(f"Found existing pull request {pull_request}")
+            logger.debug(f"Found existing pull request {pull_request}")
             pull_request.sha = sha
             return pull_request
 
@@ -84,12 +92,13 @@ class PullRequestStatus(db.Model):
             return
 
         pull_request = cls(id=id_, sha=sha, status=StatusEnum.PENDING.value, repo_id=github_repo.id, user_id=user.id)
-        logging.debug(f"Created new pull request {pull_request}")
+        logger.debug(f"Created new pull request {pull_request}")
 
         return pull_request
 
 
 class TrelloList(db.Model):
+    __tablename__ = "trello_list"
     id = db.Column(db.Integer, primary_key=True)
     list_id = db.Column(db.Text, index=True, nullable=False)
     hook_id = db.Column(db.Text, index=False, nullable=False)
@@ -109,6 +118,7 @@ class TrelloList(db.Model):
 
 
 class TrelloCard(db.Model):
+    __tablename__ = "trello_card"
     id = db.Column(db.Integer, primary_key=True)
     card_id = db.Column(db.Text, index=True, nullable=False)
     pull_request_id = db.Column(db.Integer, db.ForeignKey(PullRequestStatus.id), index=True, nullable=False)
@@ -119,6 +129,7 @@ class TrelloCard(db.Model):
 
 
 # class TrelloChecklistItem(db.Model):
+#     __tablename__ = 'trello_checklist_item'
 #     id = db.Column(db.Integer, primary_key=True)
 #     card_id = db.Column(db.Text, index=True, nullable=False)
 #     pull_request_id = db.Column(db.Integer, db.ForeignKey(PullRequestStatus.id), index=True, nullable=False)
