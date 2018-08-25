@@ -1,5 +1,6 @@
 {
   "name": "product-signoff",
+  "license": "MIT",
   "version": "0.1.0",
   "description": "Product signoff integration with GitHub and Trello",
   "repository": {
@@ -14,5 +15,13 @@
     "gulp-sass": "^4.0.1",
     "gulp-sourcemaps": "^2.6.4",
     "sass": "^1.13.0"
+  },
+  "engines": {
+    "node": "10.4.0",
+    "yarn": "1.9.4"
+  },
+  "scripts": {
+    "test": "mocha",
+    "postinstall": "gulp --production"
   }
 }
