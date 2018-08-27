@@ -49,7 +49,7 @@ def find_trello_card_ids_in_text(text):
 
 
 def get_github_token_status(app, user):
-    if user.github_token is not None:
+    if user.github_integration is not None and user.github_integration.oauth_token is not None:
         github_client = get_github_client(app, user)
         return "valid" if github_client.is_token_valid() else "invalid"
 
@@ -57,7 +57,7 @@ def get_github_token_status(app, user):
 
 
 def get_trello_token_status(app, user):
-    if user.trello_token is not None:
+    if user.trello_integration is not None and user.trello_integration.oauth_token is not None:
         trello_client = get_trello_client(app, user)
         return "valid" if trello_client.is_token_valid() else "invalid"
 

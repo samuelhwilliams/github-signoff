@@ -1,17 +1,20 @@
 import requests
 
 from app.errors import GithubUnauthorized
-from app.models import PullRequestStatus, GithubRepo
+from app.models import PullRequest, GithubRepo
 
 
 class GithubClient:
     GITHUB_API_ROOT = "https://api.github.com"
 
     def __init__(self, client_id, client_secret, user):
+        if user.github_integration is None or user.github_integration.oauth_token is None:
+            raise GithubUnauthorized("User has not completed OAuth process")
+
         self.client_id = client_id
         self.client_secret = client_secret
         self.user = user
-        self._token = self.user.github_token
+        self._token = self.user.github_integration.oauth_token
 
     def _default_params(self):
         return {"access_token": self._token}
@@ -34,7 +37,7 @@ class GithubClient:
             headers=self._default_headers(),
             auth=(self.client_id, self.client_secret) if use_basic_auth else tuple(),
         )
-        print("Response: ", response.text)
+        print("Response: ", response.status_code, response.text)
 
         if response.status_code == 401:
             raise GithubUnauthorized(response.text)
@@ -74,7 +77,7 @@ class GithubClient:
         if as_json:
             return data
 
-        return PullRequestStatus.from_json(user=self.user, data=data)
+        return PullRequest.from_json(user=self.user, data=data)
 
     def create_webhook(self, repo_id, callback_url, events=["pull_request"], active=True):
         response = self._post(
@@ -94,9 +97,9 @@ class GithubClient:
 
         return response
 
-    def set_pull_request_status(self, repo_id, sha, status, description, context, target_url=""):
+    def set_pull_request_status(self, statuses_url, status, description, context, target_url=""):
         return self._post(
-            f"/repositories/{repo_id}/statuses/{sha}",
+            statuses_url,
             json={"state": status, "description": description, "context": context, "target_url": target_url},
         )
 

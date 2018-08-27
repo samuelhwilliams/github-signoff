@@ -10,7 +10,7 @@ A powerup for integrating GitHub and Trello, with the following features:
 * Node 10.4.0
 * Yarn (v1.9.4)
 
-## TODO
+## TODO / Tech debt
 * !!! trello+github callback URLs need to contain a secret for callback authentication !!!
 * check that webhooks exist when going to /github/choose-repos
 * Fix browser console errors
@@ -23,6 +23,11 @@ A powerup for integrating GitHub and Trello, with the following features:
 * logging to text or json streams - need to pass all variables in separate from formatted strings
 * variable typing/annotations (mypy)
 * change TrelloCard.id to real id of the card - add a hydrated 'short_link' (URL slug)
+* review and sanitise db connections and transactions
+* fix site navigation (breadcrumbs and/or back buttons)
+* add target_url to github statuses (point to trello board?)
+* Centralise the from_json/hydrate logic on models
+* Clean up account deletion journey (require deleting owner repos/boards/lists first?)
 
 
 

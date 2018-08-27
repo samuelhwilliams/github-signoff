@@ -65,7 +65,7 @@ def logout_user(db):
         current_user.active = False
         db.session.add(current_user)
         db.session.commit()
-    
+
     _logout_user()
     session.clear()
 

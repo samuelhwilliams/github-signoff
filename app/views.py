@@ -25,7 +25,13 @@ from notifications_python_client.notifications import NotificationsAPIClient
 
 from app import db, mail, sparkpost
 from app.auth import login_user, logout_user, new_login_token_and_payload
-from app.errors import GithubUnauthorized, HookAlreadyExists, TrelloUnauthorized, TrelloResourceMissing, GithubResourceMissing
+from app.errors import (
+    GithubUnauthorized,
+    HookAlreadyExists,
+    TrelloUnauthorized,
+    TrelloResourceMissing,
+    GithubResourceMissing,
+)
 from app.forms import (
     AuthorizeTrelloForm,
     ChooseGithubRepoForm,
@@ -37,7 +43,7 @@ from app.forms import (
     ToggleChecklistFeatureForm,
 )
 from app.github import GithubClient
-from app.models import GithubRepo, LoginToken, PullRequestStatus, TrelloCard, TrelloList, User
+from app.models import GithubRepo, LoginToken, TrelloCard, TrelloList, User, GithubIntegration, TrelloIntegration
 from app.trello import TrelloClient
 from app.updater import Updater
 from app.utils import get_github_client, get_trello_client, get_github_token_status, get_trello_token_status
@@ -50,7 +56,7 @@ logger = logging.getLogger(__name__)
 @main_blueprint.errorhandler(TrelloUnauthorized)
 def trello_unauthorized_handler(error):
     flash(f"Invalid authorization with Trello: {str(error)}", "warning")
-    
+
     return redirect(url_for(".dashboard"))
 
 
@@ -63,8 +69,7 @@ def github_unauthorized_handler(error):
 def require_missing_or_invalid_trello_token(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        trello_client = get_trello_client(current_app, current_user)
-        if not current_user.trello_token or not trello_client.is_token_valid():
+        if get_trello_token_status(current_app, current_user) != "valid":
             return func(*args, **kwargs)
 
         flash("You already have a valid Trello token", "warning")
@@ -76,8 +81,7 @@ def require_missing_or_invalid_trello_token(func):
 def require_missing_or_invalid_github_token(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        github_client = get_github_client(current_app, current_user)
-        if not current_user.github_token or not github_client.is_token_valid():
+        if get_github_token_status(current_app, current_user) != "valid":
             return func(*args, **kwargs)
 
         flash("You already have a valid GitHub token", "warning")
@@ -169,11 +173,15 @@ def dashboard():
     trello_status = get_trello_token_status(current_app, current_user)
 
     github_repos = (
-        GithubRepo.query.filter(GithubRepo.user_id == current_user.id).all() if github_status == "valid" else []
+        GithubRepo.query.filter(GithubRepo.integration == current_user.github_integration).all()
+        if github_status == "valid"
+        else []
     )
 
     trello_lists = (
-        TrelloList.query.filter(TrelloList.user_id == current_user.id).all() if trello_status == "valid" else []
+        TrelloList.query.filter(TrelloList.integration == current_user.trello_integration).all()
+        if trello_status == "valid"
+        else []
     )
 
     return render_template(
@@ -199,11 +207,11 @@ def account():
 def delete_account():
     delete_account_form = DeleteAccountForm()
     if delete_account_form.validate_on_submit():
-        if current_user.github_token:
+        if current_user.github_integration.oauth_token:
             github_client = get_github_client(current_app, current_user)
 
             if github_client.is_token_valid():
-                for github_repo in GithubRepo.query.filter(GithubRepo.user_id == current_user.id).all():
+                for github_repo in GithubRepo.query.filter(GithubRepo.integration == current_user.github_integration).all():
                     try:
                         github_client.delete_webhook(github_repo.fullname, github_repo.hook_id)
                     except GithubResourceMissing:
@@ -211,7 +219,7 @@ def delete_account():
 
                 github_client.revoke_integration()
 
-        if current_user.trello_token:
+        if current_user.trello_integration.oauth_token:
             trello_client = get_trello_client(current_app, current_user)
             if trello_client.is_token_valid():
                 trello_client.revoke_integration()
@@ -235,14 +243,17 @@ def delete_account():
 @require_missing_or_invalid_github_token
 def integrate_github():
     if request.method == "POST":
-        current_user.github_state = str(uuid.uuid4())
+        if not current_user.github_integration:
+            current_user.github_integration = GithubIntegration()
+
+        current_user.github_integration.oauth_state = str(uuid.uuid4())
         db.session.add(current_user)
         db.session.commit()
 
         return redirect(
             current_app.config["GITHUB_OAUTH_URL"].format(
                 redirect_uri=url_for(".authorize_github_complete", _external=True),
-                state=current_user.github_state,
+                state=current_user.github_integration.oauth_state,
                 **current_app.config["GITHUB_OAUTH_SETTINGS"],
             )
         )
@@ -254,12 +265,12 @@ def integrate_github():
 def github_callback():
     if request.headers["X-GitHub-Event"] == "ping":
         return jsonify(status="OK"), 200
-    
+
     print("Incoming github payload: ", request.json)
 
     payload = request.json["pull_request"]
     repo_id = payload["head"]["repo"]["id"]
-    
+
     github_repo = GithubRepo.query.get(repo_id)
     if not github_repo:
         logger.warning(f"Callback received but no repository registered in database: {repo_id}")
@@ -275,7 +286,7 @@ def github_callback():
 @login_required
 @require_missing_or_invalid_github_token
 def authorize_github_complete():
-    if request.args["state"] != current_user.github_state:
+    if request.args["state"] != current_user.github_integration.oauth_state:
         flash("Invalid state from GitHub authentication. Possible man-in-the-middle attempt. Process aborted.")
         return redirect(url_for(".dashboard"))
 
@@ -285,13 +296,13 @@ def authorize_github_complete():
             "client_id": current_app.config["GITHUB_CLIENT_ID"],
             "client_secret": current_app.config["GITHUB_CLIENT_SECRET"],
             "code": request.args["code"],
-            "state": current_user.github_state,
+            "state": current_user.github_integration.oauth_state,
         },
         headers={"Accept": "application/json"},
     )
 
     if response.status_code == 200:
-        current_user.github_token = response.json()["access_token"]
+        current_user.github_integration.oauth_token = response.json()["access_token"]
 
         github_client = get_github_client(current_app, current_user)
         if github_client.is_token_valid():
@@ -309,7 +320,8 @@ def authorize_github_complete():
 @login_required
 def github_choose_repos():
     github_client = get_github_client(current_app, current_user)
-    repo_form = ChooseGithubRepoForm(github_client.get_repos())
+    available_repos = github_client.get_repos()
+    repo_form = ChooseGithubRepoForm(available_repos)
 
     if repo_form.validate_on_submit():
         github_client = get_github_client(current_app, current_user)
@@ -319,12 +331,12 @@ def github_choose_repos():
         updater.sync_repositories(chosen_repo_ids)
 
         return redirect(url_for(".dashboard"))
-    
+
     elif repo_form.errors:
         for error in repo_form.errors.items():
             flash(error, "warning")
 
-    existing_repos = GithubRepo.query.filter(GithubRepo.user_id == current_user.id).all()
+    existing_repos = GithubRepo.query.filter(GithubRepo.id.in_([repo.id for repo in available_repos])).all()
     repo_form.repo_choice.data = [repo.id for repo in existing_repos]
 
     return render_template("integration/select-repos.html", repo_form=repo_form)
@@ -336,7 +348,7 @@ def revoke_github():
     github_client = get_github_client(current_app, current_user)
 
     if github_client.is_token_valid():
-        for github_repo in GithubRepo.query.filter(GithubRepo.user_id == current_user.id).all():
+        for github_repo in GithubRepo.query.filter(GithubRepo.integration == current_user.github_integration).all():
             try:
                 github_client.delete_webhook(github_repo.fullname, github_repo.hook_id)
             except GithubResourceMissing:
@@ -352,8 +364,8 @@ def revoke_github():
             )
             return redirect(url_for(".dashboard"))
 
-    current_user.github_token = None
-    current_user.github_state = None
+    current_user.github_integration.oauth_token = None
+    current_user.github_integration.oauth_state = None
     db.session.add(current_user)
     db.session.commit()
 
@@ -405,13 +417,16 @@ def authorize_trello_complete():
     authorize_form = AuthorizeTrelloForm()
 
     if authorize_form.validate_on_submit():
-        current_user.trello_token = authorize_form.trello_integration.data
+        if not current_user.trello_integration:
+            current_user.trello_integration = TrelloIntegration()
+            
+        current_user.trello_integration.oauth_token = authorize_form.trello_integration.data
 
         trello_client = get_trello_client(current_app, current_user)
         if trello_client.is_token_valid():
             # Delete any lists from a user's old/expired/revoked tokens
-            TrelloList.query.filter(TrelloList.user == current_user).delete()
-            
+            TrelloList.query.filter(TrelloList.integration == current_user.trello_integration).delete()
+
             db.session.add(current_user)
             db.session.commit()
 
@@ -435,7 +450,7 @@ def revoke_trello():
             "error",
         )
 
-    current_user.trello_token = None
+    current_user.trello_integration.oauth_token = None
     db.session.add(current_user)
     db.session.commit()
 
@@ -450,7 +465,7 @@ def trello_product_signoff():
     trello_client = get_trello_client(current_app, current_user)
     trello_lists = [
         l.hydrate(trello_client=trello_client)
-        for l in TrelloList.query.filter(TrelloList.user_id == current_user.id).all()
+        for l in TrelloList.query.filter(TrelloList.integration == current_user.trello_integration).all()
     ]
     trello_boards_and_lists = {trello_client.get_board(l.board_id): l for l in trello_lists}
     return render_template("features/signoff/product-signoff.html", trello_boards_and_lists=trello_boards_and_lists)
@@ -511,7 +526,7 @@ def trello_choose_board():
     trello_boards = trello_client.get_boards()
     existing_trello_boards = {
         trello_client.get_list(l.id).board_id
-        for l in TrelloList.query.filter(TrelloList.user_id == current_user.id).all()
+        for l in TrelloList.query.filter(TrelloList.integration == current_user.trello_integration).all()
     }
 
     trello_boards = list(filter(lambda x: x.board_id not in existing_trello_boards, trello_boards))

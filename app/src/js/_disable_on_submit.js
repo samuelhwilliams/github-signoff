@@ -11,7 +11,7 @@ DisableOnSubmit.prototype.disableSubmit = function () {
     for (var i = 0; i < submitElements.length; i++) {
         submitElements[i].disabled = true
         
-        if (submitElements[i].classList.contains("disable-permanently") === false) {
+        if (this.element.classList.contains("disable-permanently") === false) {
             setTimeout(this.reenableSubmit.bind(submitElements[i]), 10000)
         }
     }

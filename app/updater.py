@@ -5,8 +5,8 @@ from flask_login import current_user
 
 from app import db
 from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum
-from app.errors import TrelloInvalidRequest, TrelloResourceMissing
-from app.models import GithubRepo, TrelloCard, TrelloList, TrelloChecklist, TrelloChecklistItem, PullRequestStatus
+from app.errors import TrelloInvalidRequest, TrelloResourceMissing, GithubResourceMissing, GithubUnauthorized
+from app.models import GithubRepo, TrelloCard, TrelloList, TrelloChecklist, TrelloCheckitem, PullRequest
 from app.utils import get_github_client, get_trello_client, find_trello_card_ids_in_text
 
 
@@ -24,8 +24,7 @@ class Updater:
     def _set_pull_request_status(self, pull_request, status):
         description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
         response = self.github_client.set_pull_request_status(
-            repo_id=pull_request.repo_id,
-            sha=pull_request.sha,
+            statuses_url=pull_request.statuses_url,
             status=status,
             description=description,
             context=self.app.config["APP_NAME"],
@@ -52,13 +51,13 @@ class Updater:
             old_trello_card = TrelloCard.query.filter(TrelloCard.id == card_id).one()
 
             if old_trello_card.trello_checklist:
-                trello_checklist_item = TrelloChecklistItem.query.filter(
-                    TrelloChecklistItem.checklist == old_trello_card.trello_checklist,
-                    TrelloChecklistItem.pull_request == pull_request,
+                trello_checkitem = TrelloCheckitem.query.filter(
+                    TrelloCheckitem.checklist == old_trello_card.trello_checklist,
+                    TrelloCheckitem.pull_request == pull_request,
                 ).first()
-                if trello_checklist_item:
-                    self.trello_client.delete_checklist_item(
-                        checklist_id=old_trello_card.trello_checklist.id, checklist_item_id=trello_checklist_item.id
+                if trello_checkitem:
+                    self.trello_client.delete_checkitem(
+                        checklist_id=old_trello_card.trello_checklist.id, checkitem_id=trello_checkitem.id
                     )
             db.session.delete(old_trello_card)
 
@@ -98,54 +97,54 @@ class Updater:
                     real_card_id=trello_card.real_id, checklist_name=self.app.config["FEATURE_CHECKLIST_NAME"]
                 )
 
-            found_trello_checklist_item = None
-            for trello_checklist_item in trello_checklist.trello_checklist_items:
+            found_trello_checkitem = None
+            for trello_checkitem in trello_checklist.trello_checkitems:
                 if (
-                    trello_checklist_item.checklist_id == trello_checklist.id
-                    and trello_checklist_item.pull_request_id == pull_request.id
+                    trello_checkitem.checklist_id == trello_checklist.id
+                    and trello_checkitem.pull_request_id == pull_request.id
                 ):
-                    found_trello_checklist_item = trello_checklist_item
+                    found_trello_checkitem = trello_checkitem
                     break
 
-            trello_checklist_item = found_trello_checklist_item
-            if trello_checklist_item:
+            trello_checkitem = found_trello_checkitem
+            if trello_checkitem:
                 try:
-                    trello_checklist_item.hydrate(trello_client=self.trello_client)
+                    trello_checkitem.hydrate(trello_client=self.trello_client)
 
                 except TrelloResourceMissing:
                     print("resource is missing, yep checkitem")
-                    if trello_checklist_item:
+                    if trello_checkitem:
                         print("deleting")
-                        trello_checklist.trello_checklist_items.remove(trello_checklist_item)
+                        trello_checklist.trello_checkitems.remove(trello_checkitem)
                         db.session.add(trello_checklist)
-                        db.session.delete(trello_checklist_item)
+                        db.session.delete(trello_checkitem)
                         db.session.flush()
-                        trello_checklist_item = None
+                        trello_checkitem = None
 
-            if not trello_checklist_item:
-                trello_checklist_item = self.trello_client.create_checklist_item(
+            if not trello_checkitem:
+                trello_checkitem = self.trello_client.create_checkitem(
                     checklist_id=trello_checklist.id,
-                    checklist_item_name=pull_request.url,
-                    checked="true" if pull_request.pr_status == "closed" else "false",
+                    checkitem_name=pull_request.url,
+                    checked="true" if pull_request.state == "closed" else "false",
                 )
-            elif (trello_checklist_item.state == "incomplete" and pull_request.pr_status == "closed") or (
-                trello_checklist_item.state == "complete" and pull_request.pr_status == "open"
+            elif (trello_checkitem.state == "incomplete" and pull_request.state == "closed") or (
+                trello_checkitem.state == "complete" and pull_request.state == "open"
             ):
-                self.trello_client.update_checklist_item(
+                self.trello_client.update_checkitem(
                     real_card_id=trello_card.real_id,
-                    checklist_item_id=trello_checklist_item.id,
-                    state="complete" if pull_request.pr_status == "closed" else "incomplete",
+                    checkitem_id=trello_checkitem.id,
+                    state="complete" if pull_request.state == "closed" else "incomplete",
                 )
 
             trello_checklist.card_id = trello_card.id
-            trello_checklist_item.pull_request_id = pull_request.id
+            trello_checkitem.pull_request_id = pull_request.id
             db.session.add(trello_checklist)
-            db.session.add(trello_checklist_item)
+            db.session.add(trello_checkitem)
 
         db.session.commit()
 
     def sync_pull_request(self, user, data):
-        pull_request = PullRequestStatus.from_json(user=user, data=data)
+        pull_request = PullRequest.from_json(user=user, data=data)
 
         self._update_tracked_trello_cards(pull_request=pull_request)
 
@@ -173,17 +172,18 @@ class Updater:
     def sync_repositories(self, chosen_repo_ids):
         print(chosen_repo_ids)
         existing_repo_ids = {
-            repo.id
-            for repo in GithubRepo.query.filter(
-                GithubRepo.user_id == current_user.id
-            ).all()
+            repo.id for repo in GithubRepo.query.filter(GithubRepo.integration == current_user.github_integration).all()
         }
         print(existing_repo_ids)
 
         repos_to_deintegrate = GithubRepo.query.filter(GithubRepo.id.in_(existing_repo_ids - chosen_repo_ids)).all()
 
         for repo in repos_to_deintegrate:
-            self.github_client.delete_webhook(repo.id, repo.hook_id)
+            try:
+                self.github_client.delete_webhook(repo.id, repo.hook_id)
+            except (GithubResourceMissing, GithubUnauthorized) as e:
+                logger.warn(f"Unable to delete hook for {repo}: {e}")
+
             db.session.delete(repo)
             flash(f"This powerup is no longer monitoring the ‘{repo.fullname}’ repository.", "warning")
 
@@ -196,7 +196,7 @@ class Updater:
                 active=True,
             )
             print(hook)
-            repo = GithubRepo(id=repo, hook_id=hook["id"], user_id=current_user.id)
+            repo = GithubRepo(id=repo, hook_id=hook["id"], integration=current_user.github_integration)
             repo.hydrate(github_client=self.github_client)
 
             db.session.add(repo)

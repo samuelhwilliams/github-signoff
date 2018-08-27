@@ -1,7 +1,7 @@
 import logging
 import requests
 
-from app.models import TrelloBoard, TrelloList, TrelloCard, TrelloChecklist, TrelloChecklistItem
+from app.models import TrelloBoard, TrelloList, TrelloCard, TrelloChecklist, TrelloCheckitem
 from app.errors import TrelloUnauthorized, HookAlreadyExists, TrelloInvalidRequest, TrelloResourceMissing
 
 
@@ -17,9 +17,12 @@ class TrelloClient:
     TRELLO_API_ROOT = "https://api.trello.com/1"
 
     def __init__(self, key, user):
+        if user.trello_integration is None or user.trello_integration.oauth_token is None:
+            raise TrelloUnauthorized("User has not completed OAuth process")
+
         self.key = key
         self.user = user
-        self._token = self.user.trello_token
+        self._token = self.user.trello_integration.oauth_token
 
     def _default_params(self):
         return {"key": self.key, "token": self._token}
@@ -32,7 +35,7 @@ class TrelloClient:
 
         print("Request settings: ", method, path, params)
         response = requests.request(method=method, url=f"{TrelloClient.TRELLO_API_ROOT}/{path}", params=all_params)
-        print("Response: ", response.text)
+        print("Response: ", response.status_code, response.text)
 
         if response.status_code == 401:
             raise TrelloUnauthorized(response.text)
@@ -147,29 +150,28 @@ class TrelloClient:
 
         return response
 
-    def create_checklist_item(self, checklist_id, checklist_item_name, pos="bottom", checked="false"):
+    def create_checkitem(self, checklist_id, checkitem_name, pos="bottom", checked="false"):
         data = self._post(
-            f"checklists/{checklist_id}/checkItems",
-            params={"name": checklist_item_name, "pos": pos, "checked": checked},
+            f"checklists/{checklist_id}/checkItems", params={"name": checkitem_name, "pos": pos, "checked": checked}
         ).json()
 
-        return TrelloChecklistItem.from_json(data)
+        return TrelloCheckitem.from_json(data)
 
-    def update_checklist_item(self, real_card_id, checklist_item_id, state="incomplete"):
-        data = self._put(f"cards/{real_card_id}/checkItem/{checklist_item_id}", params={"state": state}).json()
+    def update_checkitem(self, real_card_id, checkitem_id, state="incomplete"):
+        data = self._put(f"cards/{real_card_id}/checkItem/{checkitem_id}", params={"state": state}).json()
 
-        return TrelloChecklistItem.from_json(data)
+        return TrelloCheckitem.from_json(data)
 
-    def get_checklist_item(self, checklist_id, checklist_item_id, as_json=False):
-        data = self._get(f"checklists/{checklist_id}/checkItems/{checklist_item_id}").json()
+    def get_checkitem(self, checklist_id, checkitem_id, as_json=False):
+        data = self._get(f"checklists/{checklist_id}/checkItems/{checkitem_id}").json()
 
         if as_json:
             return data
 
-        return TrelloChecklistItem.from_json(data)
+        return TrelloCheckitem.from_json(data)
 
-    def delete_checklist_item(self, checklist_id, checklist_item_id):
-        response = self._delete(f"checklists/{checklist_id}/checkItems/{checklist_item_id}")
+    def delete_checkitem(self, checklist_id, checkitem_id):
+        response = self._delete(f"checklists/{checklist_id}/checkItems/{checkitem_id}")
 
         return response
 
