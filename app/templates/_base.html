@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8" />
-  <title>{% block title %}Product signoff integration{% endblock %}</title>
+  <title>{% block title %}Github & Trello Powerup{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b0c0c" />
 
@@ -52,7 +52,7 @@
       <div class="govuk-header__content">
 
         <a href="{% if current_user.is_authenticated %}{{ url_for('.dashboard') }}{% else %}{{ url_for('.start_page') }}{% endif %}" class="govuk-header__link govuk-header__link--service-name">
-          Github+Trello Powerup
+          Github & Trello Powerup
         </a>
 
         <button role="button" class="govuk-header__menu-button js-header-toggle" aria-controls="navigation" aria-label="Show or hide Top Level Navigation">Menu</button>

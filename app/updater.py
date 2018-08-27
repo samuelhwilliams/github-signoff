@@ -185,7 +185,7 @@ class Updater:
         for repo in repos_to_deintegrate:
             self.github_client.delete_webhook(repo.id, repo.hook_id)
             db.session.delete(repo)
-            flash(f"This powerup has been disconnected from the ‘{repo.fullname}’ repository.", "warning")
+            flash(f"This powerup is no longer monitoring the ‘{repo.fullname}’ repository.", "warning")
 
         for repo in chosen_repo_ids - existing_repo_ids:
             print("creating webhook for ", repo)
@@ -200,7 +200,7 @@ class Updater:
             repo.hydrate(github_client=self.github_client)
 
             db.session.add(repo)
-            flash(f"This powerup is now monitoring the ‘{repo.fullname}’ repository.", "info")
+            flash(f"This powerup has been connected the ‘{repo.fullname}’ repository.", "info")
 
         db.session.commit()
 
