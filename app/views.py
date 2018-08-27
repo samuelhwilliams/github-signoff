@@ -62,14 +62,14 @@ logger = logging.getLogger(__name__)
 
 @main_blueprint.errorhandler(TrelloUnauthorized)
 def trello_unauthorized_handler(error):
-    flash(f"Invalid authorization with Trello: {str(error)}", "warning")
+    flash(f"Invalid authorisation with Trello: {str(error)}", "warning")
 
     return redirect(url_for(".dashboard"))
 
 
 @main_blueprint.errorhandler(GithubUnauthorized)
 def github_unauthorized_handler(error):
-    flash(f"Invalid authorization with GitHub: {str(error)}", "warning")
+    flash(f"Invalid authorisation with GitHub: {str(error)}", "warning")
     return redirect(url_for(".dashboard"))
 
 
@@ -239,7 +239,7 @@ def delete_account():
         db.session.commit()
         session.clear()
 
-        flash("Your account and all authorizations have been deleted.", "warning")
+        flash("Your account and all authorisations have been deleted.", "warning")
         return redirect(url_for(".start_page"))
 
     elif delete_account_form.errors:
@@ -250,7 +250,7 @@ def delete_account():
 
 
 @main_blueprint.route("/github/integration", methods=["GET", "POST"])
-@register_breadcrumb(main_blueprint, ".integrate_github", "Create authorization for GitHub")
+@register_breadcrumb(main_blueprint, ".integrate_github", "Create authorisation for GitHub")
 @login_required
 @require_missing_or_invalid_github_token
 def integrate_github():
@@ -294,7 +294,7 @@ def github_callback():
         return jsonify(status="BAD SLUG"), 400
 
     print(request.headers["X-Hub-Signature"])  # TODO: Authentication via github_repo.hook_secret
-    verify_signature = 'sha1=' + hmac.new(github_repo.hook_secret, request.body, hashlib.sha1)
+    verify_signature = 'sha1=' + hmac.new(github_repo.hook_secret, request.text, hashlib.sha1)
     print(verify_signature)
     if not hmac.compare_digest(request.headers["X-Hub-Signature"], verify_signature):
         return jsonify(status="OK"), 200
@@ -332,10 +332,10 @@ def authorize_github_complete():
             db.session.add(current_user)
             db.session.commit()
 
-            flash("GitHub authorization successful.", "info")
+            flash("GitHub authorisation successful.", "info")
             return redirect(url_for(".dashboard"))
 
-    flash("The GitHub authorization token you have submitted is invalid. Please try again.", "warning")
+    flash("The GitHub authorisation token you have submitted is invalid. Please try again.", "warning")
     return render_template(url_for(".integrate_github"))
 
 
@@ -427,7 +427,7 @@ def revoke_github():
         if github_client.revoke_integration() is False:
             flash(
                 (
-                    "Something went wrong revoking your GitHub authorization. Please revoke it directly from "
+                    "Something went wrong revoking your GitHub authorisation. Please revoke it directly from "
                     "https://github.com/settings/applications"
                 ),
                 "error",
@@ -437,7 +437,7 @@ def revoke_github():
     db.session.delete(current_user.github_integration)
     db.session.commit()
 
-    flash("GitHub authorization token revoked successfully.")
+    flash("GitHub authorisation token revoked successfully.")
 
     return redirect(url_for(".dashboard"))
 
@@ -461,7 +461,7 @@ def trello_callback():
 
 
 @main_blueprint.route("/trello/integration", methods=["GET"])
-@register_breadcrumb(main_blueprint, ".integrate_trello", "Create authorization for Trello")
+@register_breadcrumb(main_blueprint, ".integrate_trello", "Create authorisation for Trello")
 @login_required
 @require_missing_or_invalid_trello_token
 def integrate_trello():
@@ -469,7 +469,7 @@ def integrate_trello():
     return render_template("integration/trello.html", authorize_form=authorize_form)
 
 
-@main_blueprint.route("/trello/integration/authorize", methods=["POST"])
+@main_blueprint.route("/trello/integration/authorise", methods=["POST"])
 @login_required
 @require_missing_or_invalid_trello_token
 def authorize_trello():
@@ -499,10 +499,10 @@ def authorize_trello_complete():
             db.session.add(current_user)
             db.session.commit()
 
-            flash("Trello authorization successful.", "info")
+            flash("Trello authorisation successful.", "info")
             return redirect(url_for(".dashboard"))
 
-        flash("The Trello authorization token you have submitted is invalid. Please try again.", "warning")
+        flash("The Trello authorisation token you have submitted is invalid. Please try again.", "warning")
         return render_template("integrate-trello.html", authorize_form=authorize_form)
 
     flash("Form submit failed", "error")
@@ -515,14 +515,14 @@ def revoke_trello():
     trello_client = get_trello_client(current_app, current_user)
     if trello_client.revoke_integration() is False:
         flash(
-            "Something went wrong revoking your Trello authorization. Please do it directly from your Trello account.",
+            "Something went wrong revoking your Trello authorisation. Please do it directly from your Trello account.",
             "error",
         )
 
     db.session.delete(current_user.trello_integration)
     db.session.commit()
 
-    flash("Trello authorization token revoked successfully.")
+    flash("Trello authorisation token revoked successfully.")
 
     return redirect(url_for(".dashboard"))
 
@@ -680,7 +680,7 @@ def trello_choose_list():
         db.session.commit()
 
         flash((f"Product sign-off checks added to the “{list_choices.get(list_form.list_choice.data)}” board."), "info")
-        return redirect(url_for(".trello_product_signoff"))
+        return redirect(url_for(".dashboard"))
 
     elif list_form.errors:
         for error in list_form.errors.items():

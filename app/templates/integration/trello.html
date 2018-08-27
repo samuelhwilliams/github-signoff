@@ -1,17 +1,17 @@
 {% extends '_base.html' %}
 
-{% block title %}Create authorization for Trello{% endblock %}
+{% block title %}Create authorisation for Trello{% endblock %}
 
 {% block main %}
 <div class="govuk-grid-row">
   <div class="govuk-grid-column-two-thirds">
-    <h1 class="govuk-heading-xl">Create authorization for Trello</h1>
+    <h1 class="govuk-heading-xl">Create authorisation for Trello</h1>
 
     <ol class="govuk-list">
       <li>
-        <h2 class="govuk-heading-m">1. Generate an authorization token</h2>
+        <h2 class="govuk-heading-m">1. Generate an authorisation token</h2>
         <div class="govuk-inset-text">
-          You will be taken away from this service. Continue from this page when you have generated your authorization token.
+          You will be taken away from this service. Continue from this page when you have generated your authorisation token.
         </div>
         
         <form method="POST" action="{{ url_for('.authorize_trello') }}" data-module="disable-on-submit disable-permanently" target="_blank">
@@ -19,14 +19,14 @@
         </form>
       </li>
       <li>
-        <h2 class="govuk-heading-m">2. Submit your authorization token</h2>
-        <p class="govuk-body">The authorization will only be used for any purposes that you explicitly enable.</p>
+        <h2 class="govuk-heading-m">2. Submit your authorisation token</h2>
+        <p class="govuk-body">The authorisation will only be used for any purposes that you explicitly enable.</p>
         <form method="POST" action="{{ url_for('.authorize_trello_complete') }}" data-module="disable-on-submit" enctype="multipart/form-data">
           <div class="govuk-form-group">
           {{ authorize_form.csrf_token }}
           {{ authorize_form.trello_integration(class_="govuk-input") }}
           </div>
-          <input class="govuk-button" type="submit" value="Complete Authorization">
+          <input class="govuk-button" type="submit" value="Complete Authorisation">
         </form>
       </li>
     </ol>

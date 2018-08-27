@@ -8,15 +8,15 @@
   <div>
     <ol class="app-task-list">
       <li>
-        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">1. </span>Authorize external services</h2>
+        <h2 class="govuk-heading-m"><span class="app-task-list__section-number">1. </span>Authorise external services</h2>
         <ul class="app-task-list__items">
           <li class="app-task-list__item">
             {% if not github_status %}
-            <a href="{{ url_for('.integrate_github') }}">Create authorization for GitHub</a>
+            <a href="{{ url_for('.integrate_github') }}">Create authorisation for GitHub</a>
             {% elif github_status == "invalid" %}
-            <a href="{{ url_for('.integrate_github') }}">Re-authorize GitHub</a>
+            <a href="{{ url_for('.integrate_github') }}">Re-authorise GitHub</a>
             {% else %}
-            <div class="app-task-list__text govuk-!-margin-bottom-0">Create authorization for GitHub</div>
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Create authorisation for GitHub</div>
             {% endif %}
             
             {% if github_status == "valid" %}
@@ -27,11 +27,11 @@
           </li>
           <li class="app-task-list__item">
             {% if not trello_status %}
-            <a href="{{ url_for('.integrate_trello') }}">Create authorization for Trello</a>
+            <a href="{{ url_for('.integrate_trello') }}">Create authorisation for Trello</a>
             {% elif trello_status == "invalid" %}
-            <a href="{{ url_for('.integrate_trello') }}">Re-authorize Trello</a>
+            <a href="{{ url_for('.integrate_trello') }}">Re-authorise Trello</a>
             {% else %}
-            <div class="app-task-list__text govuk-!-margin-bottom-0">Create authorization for Trello</div>
+            <div class="app-task-list__text govuk-!-margin-bottom-0">Create authorisation for Trello</div>
             {% endif %}
             
             {% if trello_status == "valid" %}

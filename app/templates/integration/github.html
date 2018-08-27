@@ -1,17 +1,17 @@
 {% extends '_base.html' %}
 
-{% block title %}Authorize GitHub{% endblock %}
+{% block title %}Authorise GitHub{% endblock %}
 
 {% block main %}
 <div class="govuk-grid-row">
   <div class="govuk-grid-column-two-thirds">
-    <h1 class="govuk-heading-xl">Create authorization for GitHub</h1>
+    <h1 class="govuk-heading-xl">Create authorisation for GitHub</h1>
 
     <p class="govuk-body">Click below to allow this service to interact with GitHub.</p>
-    <p class="govuk-body">The authorization will only be used for any purposes that you explicitly enable.</p>
+    <p class="govuk-body">The authorisation will only be used for any purposes that you explicitly enable.</p>
     
     <form method="POST" action="{{ url_for('.integrate_github') }}" data-module="disable-on-submit disable-permanently">
-      <input class="govuk-button" type="submit" id="authorize-github" value="Authorize Github">
+      <input class="govuk-button" type="submit" id="authorize-github" value="Authorise Github">
     </form>
   </div>
 </div>

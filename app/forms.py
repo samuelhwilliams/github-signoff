@@ -52,7 +52,7 @@ class TransferGithubRepoForm(FlaskForm):
 
 
 class AuthorizeTrelloForm(FlaskForm):
-    trello_integration = StringField(label="Trello Authorization Token", validators=[DataRequired()])
+    trello_integration = StringField(label="Trello Authorisation Token", validators=[DataRequired()])
 
 
 class ChooseTrelloBoardForm(FlaskForm):
