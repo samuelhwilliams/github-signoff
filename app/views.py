@@ -23,7 +23,7 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from notifications_python_client.notifications import NotificationsAPIClient
 
-from app import db, mail
+from app import db, mail, sparkpost
 from app.auth import login_user, logout_user, new_login_token_and_payload
 from app.errors import GithubUnauthorized, HookAlreadyExists, TrelloUnauthorized, TrelloResourceMissing, GithubResourceMissing
 from app.forms import (
@@ -105,17 +105,29 @@ def login():
         db.session.add(user)
 
         token, payload = new_login_token_and_payload(current_app, db, user)
-
-        message = Message(
-            f"Login to {current_app.config['APP_NAME']}",
-            sender=current_app.config["MAIL_DEFAULT_SENDER"],
-            recipients=[login_form.email.data],
-        )
-        message.html = render_template(
-            "email/login-link.html", login_link=url_for(".login_with_payload", payload=payload, _external=True)
+        
+        message_body = render_template(
+            "email/login-link.html",
+            login_link=url_for(".login_with_payload", payload=payload, _external=True)
         )
         
-        mail.send(message)
+        sparkpost.transmissions.send(
+            recipients=[login_form.email.data],
+            html=message_body,
+            from_email=current_app.config["MAIL_DEFAULT_SENDER"],
+            subject=f"Login to {current_app.config['APP_NAME']}",
+        )
+
+        # message = Message(
+        #     f"Login to {current_app.config['APP_NAME']}",
+        #     sender=current_app.config["MAIL_DEFAULT_SENDER"],
+        #     recipients=[login_form.email.data],
+        # )
+        # message.html = render_template(
+        #     "email/login-link.html", login_link=url_for(".login_with_payload", payload=payload, _external=True)
+        # )
+
+        # mail.send(message)
 
         # notifications_client = NotificationsAPIClient(current_app.config["NOTIFY_API_KEY"])
         # notifications_client.send_email_notification(
@@ -124,7 +136,7 @@ def login():
         #     personalisation={"login_link": url_for(".login_with_payload", payload=payload, _external=True)},
         # )
 
-        print(message)
+        print(message_body)
 
         db.session.commit()
 
