@@ -118,15 +118,11 @@ class GithubRepo(db.Model):
     )
 
     @classmethod
-    def from_json(cls, user, data):
+    def from_json(cls, data):
         github_repo = cls.query.get(data["id"])
         if not github_repo:
             github_repo = cls()
             github_repo.hydrate(data=data)
-            github_repo.user_id = user.id
-
-        elif github_repo.user_id != user.id:
-            raise ValueError("Mismatch for repo owner in github callback vs database")
 
         return github_repo
 
@@ -165,16 +161,12 @@ class PullRequest(db.Model):
     user = db.relationship(User, lazy="joined", backref=backref("pull_requests", cascade="all, delete-orphan"))
 
     @classmethod
-    def from_json(cls, user, data):
+    def from_json(cls, data):
         pull_request = cls.query.get(data["id"])
         if not pull_request:
             pull_request = cls()
 
-        elif pull_request.user_id != user.id:
-            raise ValueError("Mismatch for pull request owner in github callback vs database")
-
         pull_request.hydrate(data=data)
-        pull_request.user_id = user.id
 
         return pull_request
 

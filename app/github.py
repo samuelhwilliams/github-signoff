@@ -56,11 +56,7 @@ class GithubClient:
     def get_repos(self):
         data = self._get(f"/user/repos").json()
 
-        repos = [
-            GithubRepo.from_json(user=self.user, data=repo_data)
-            for repo_data in data
-            if repo_data["permissions"]["admin"]
-        ]
+        repos = [GithubRepo.from_json(data=repo_data) for repo_data in data if repo_data["permissions"]["admin"]]
         return repos
 
     def get_repo(self, repo_id, as_json=False):
@@ -69,7 +65,7 @@ class GithubClient:
         if as_json:
             return data
 
-        return GithubRepo.from_json(user=self.user, data=data)
+        return GithubRepo.from_json(data=data)
 
     def get_pull_request(self, repository_id, pull_request_id, as_json=False):
         data = self._get(f"/repositories/{pull_request_id}/").json()
@@ -77,7 +73,7 @@ class GithubClient:
         if as_json:
             return data
 
-        return PullRequest.from_json(user=self.user, data=data)
+        return PullRequest.from_json(data=data)
 
     def create_webhook(self, repo_id, callback_url, events=["pull_request"], active=True):
         response = self._post(

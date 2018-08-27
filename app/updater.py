@@ -1,7 +1,6 @@
 import logging
 
 from flask import flash, url_for
-from flask_login import current_user
 
 from app import db
 from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum
@@ -143,15 +142,15 @@ class Updater:
 
         db.session.commit()
 
-    def sync_pull_request(self, user, data):
-        pull_request = PullRequest.from_json(user=user, data=data)
+    def sync_pull_request(self, data):
+        pull_request = PullRequest.from_json(data=data)  # removed user from this - will it break stuff??
 
         self._update_tracked_trello_cards(pull_request=pull_request)
 
         db.session.add(pull_request)
         db.session.commit()
 
-        if user.checklist_feature_enabled:
+        if self.user.checklist_feature_enabled:
             self._update_trello_checklists(pull_request)
 
         signed_off_count = 0
@@ -172,7 +171,7 @@ class Updater:
     def sync_repositories(self, chosen_repo_ids):
         print(chosen_repo_ids)
         existing_repo_ids = {
-            repo.id for repo in GithubRepo.query.filter(GithubRepo.integration == current_user.github_integration).all()
+            repo.id for repo in GithubRepo.query.filter(GithubRepo.integration == self.user.github_integration).all()
         }
         print(existing_repo_ids)
 
@@ -196,7 +195,7 @@ class Updater:
                 active=True,
             )
             print(hook)
-            repo = GithubRepo(id=repo, hook_id=hook["id"], integration=current_user.github_integration)
+            repo = GithubRepo(id=repo, hook_id=hook["id"], integration=self.user.github_integration)
             repo.hydrate(github_client=self.github_client)
 
             db.session.add(repo)

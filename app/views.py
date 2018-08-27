@@ -277,7 +277,7 @@ def github_callback():
         return jsonify(status="OK"), 200
 
     updater = Updater(current_app, db, github_repo.user)
-    updater.sync_pull_request(user=github_repo.user, data=payload)
+    updater.sync_pull_request(data=payload)
 
     return jsonify(status="OK"), 200
 
