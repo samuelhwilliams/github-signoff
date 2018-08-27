@@ -294,7 +294,7 @@ def github_callback():
         return jsonify(status="BAD SLUG"), 400
 
     print(request.headers["X-Hub-Signature"])  # TODO: Authentication via github_repo.hook_secret
-    verify_signature = 'sha1=' + hmac.new(github_repo.hook_secret, request.text, hashlib.sha1)
+    verify_signature = 'sha1=' + hmac.new(github_repo.hook_secret.encode('utf8'), request.data, hashlib.sha1).hexdigest()
     print(verify_signature)
     if not hmac.compare_digest(request.headers["X-Hub-Signature"], verify_signature):
         return jsonify(status="OK"), 200
