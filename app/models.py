@@ -9,8 +9,6 @@ from app.constants import StatusEnum
 
 logger = logging.getLogger(__name__)
 
-CASCADE_FULL = "all, delete-orphan"
-
 
 class LoginToken(db.Model):
     __tablename__ = "login_token"
@@ -33,7 +31,7 @@ class User(db.Model):
     checklist_feature_enabled = db.Column(db.Boolean, default=False, nullable=False)
 
     login_tokens = db.relationship(
-        LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref="user", cascade=CASCADE_FULL
+        LoginToken, primaryjoin=id == LoginToken.user_id, lazy="joined", backref="user", cascade="all, delete-orphan"
     )
 
     @classmethod
@@ -65,7 +63,7 @@ class GithubRepo(db.Model):
     hook_id = db.Column(db.Integer, index=False, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_github_repo_user_id"), index=True, nullable=False)
 
-    user = db.relationship(User, lazy="joined", backref=backref("github_repos", cascade=CASCADE_FULL))
+    user = db.relationship(User, lazy="joined", backref=backref("github_repos", cascade="all, delete-orphan"))
 
     @classmethod
     def from_json(cls, user, data):
@@ -106,8 +104,8 @@ class PullRequestStatus(db.Model):
     )
     user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_pull_request_status_user_id"), nullable=False)
 
-    repo = db.relationship(GithubRepo, lazy="joined", backref=backref("pull_requests", cascade=CASCADE_FULL))
-    user = db.relationship(User, lazy="joined", backref=backref("pull_requests", cascade=CASCADE_FULL))
+    repo = db.relationship(GithubRepo, lazy="joined", backref=backref("pull_requests", cascade="all, delete-orphan"))
+    user = db.relationship(User, lazy="joined", backref=backref("pull_requests", cascade="all, delete-orphan"))
 
     @classmethod
     def from_json(cls, user, data):
@@ -171,7 +169,7 @@ class TrelloList(db.Model):
     hook_id = db.Column(db.Text, index=False, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_trello_list_user_id"), index=True, nullable=False)
 
-    user = db.relationship(User, lazy="joined", backref=backref("trello_lists", cascade=CASCADE_FULL))
+    user = db.relationship(User, lazy="joined", backref=backref("trello_lists", cascade="all, delete-orphan"))
 
     @classmethod
     def from_json(cls, data):
@@ -254,7 +252,9 @@ class TrelloChecklist(db.Model):
         db.Text, db.ForeignKey(TrelloCard.id, name="fk_trello_checklist_trello_card_id"), unique=True, nullable=False
     )
 
-    card = db.relationship(TrelloCard, lazy="joined", backref=backref("trello_checklist", uselist=False, cascade=CASCADE_FULL))
+    card = db.relationship(
+        TrelloCard, lazy="joined", backref=backref("trello_checklist", uselist=False, cascade="all, delete-orphan")
+    )
 
     @classmethod
     def from_json(cls, data):
@@ -292,10 +292,10 @@ class TrelloChecklistItem(db.Model):
     )
 
     checklist = db.relationship(
-        TrelloChecklist, lazy="joined", backref=backref("trello_checklist_items", cascade=CASCADE_FULL)
+        TrelloChecklist, lazy="joined", backref=backref("trello_checklist_items", cascade="all, delete-orphan")
     )
     pull_request = db.relationship(
-        PullRequestStatus, lazy="joined", backref=backref("trello_checklist_items", cascade=CASCADE_FULL)
+        PullRequestStatus, lazy="joined", backref=backref("trello_checklist_items", cascade="all, delete-orphan")
     )
 
     __table_args__ = (db.UniqueConstraint(checklist_id, pull_request_id, name="uix_checklist_id_pull_request_id"),)
