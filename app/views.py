@@ -145,7 +145,7 @@ def login_with_payload(payload):
 @main_blueprint.route("/logout")
 @login_required
 def logout():
-    logout_user()
+    logout_user(db)
     flash("You have been logged out.", "info")
     return redirect(url_for(".start_page"))
 

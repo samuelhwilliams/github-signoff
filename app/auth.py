@@ -6,23 +6,13 @@ import uuid
 
 from cryptography.fernet import Fernet
 from flask import flash, session
-from flask_login import login_user as _login_user, logout_user as _logout_user
+from flask_login import login_user as _login_user, logout_user as _logout_user, current_user
 
 from app import login_manager
 from app.models import User, LoginToken
 
 
 logger = logging.getLogger(__name__)
-
-
-def my_login_user(user):
-    _login_user(user)
-    session["token_guid"] = user.login_tokens[-1].guid
-
-
-def my_logout_user():
-    _logout_user()
-    session.clear()
 
 
 @login_manager.user_loader
@@ -70,8 +60,19 @@ def new_login_token_and_payload(app, db, user):
     return token, payload
 
 
+def logout_user(db):
+    if current_user.is_authenticated:
+        current_user.active = False
+        db.session.add(current_user)
+        db.session.commit()
+    
+    _logout_user()
+    session.clear()
+
+
 def login_user(app, db, payload):
-    my_logout_user()
+    logout_user(db)
+
     fernet = Fernet(app.config["SECRET_KEY"])
     b64_string = base64.urlsafe_b64decode((payload + "===").encode("utf8"))
     payload_data = json.loads(fernet.decrypt(b64_string))
@@ -100,12 +101,9 @@ def login_user(app, db, payload):
         db.session.add(token.user)
         db.session.commit()
 
-        my_login_user(token.user)
+        _login_user(token.user)
+        session["token_guid"] = token.user.login_tokens[-1].guid
 
         return token.user
 
     return None
-
-
-def logout_user():
-    my_logout_user()
