@@ -1,3 +1,4 @@
+from flask import current_app
 import requests
 from urllib.parse import urlparse
 
@@ -29,7 +30,7 @@ class GithubClient:
 
         params = {**self._default_params(), **params}
 
-        print("Request settings: ", method, path, params)
+        current_app.logger.debug(f"Request settings: {method}, {path}, {params}")
         response = requests.request(
             method=method,
             url=f"{GithubClient.GITHUB_API_ROOT}{path}",
@@ -38,7 +39,7 @@ class GithubClient:
             headers=self._default_headers(),
             auth=(self.client_id, self.client_secret) if use_basic_auth else tuple(),
         )
-        print("Response: ", response.status_code, response.text)
+        current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
 
         if response.status_code == 401:
             raise GithubUnauthorized(response.text)

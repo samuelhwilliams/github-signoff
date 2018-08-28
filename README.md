@@ -11,12 +11,10 @@ A powerup for integrating GitHub and Trello, with the following features:
 * Yarn (v1.9.4)
 
 ## TODO / Tech debt
-* !!! trello+github callback URLs need to contain a secret for callback authentication !!!
+* !!! trello callback URLs need to contain a secret for callback authentication !!!
 * check that webhooks exist when going to /github/choose-repos
 * Fix browser console errors
     * missing images/icon-pointer for start page
-* multi user support
-    * github/trello tokens with access to same repos/boards should be able to see/edit all their shared repos/board
 * regular data deletions for old/unused accounts/hooks/tokens
 * refactor api hydration calls to minimise external requests (check how many are being sent out and what's bad)
 * work out why alembic is generating drop+create foreign key migrations
@@ -28,6 +26,7 @@ A powerup for integrating GitHub and Trello, with the following features:
 * add target_url to github statuses (point to trello board?)
 * Centralise the from_json/hydrate logic on models
 * Clean up account deletion journey (require deleting owner repos/boards/lists first?)
+* refactor trello/github clients to have centralised core methods (_request/_get/...)
 
 
 

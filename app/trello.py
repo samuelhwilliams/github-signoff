@@ -31,9 +31,9 @@ class TrelloClient:
 
         all_params = {**self._default_params(), **params}
 
-        print("Request settings: ", method, path, params)
+        current_app.logger.debug(f"Request settings: {method}, {path}, {params}")
         response = requests.request(method=method, url=f"{TrelloClient.TRELLO_API_ROOT}{path}", params=all_params)
-        print("Response: ", response.status_code, response.text)
+        current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
 
         if response.status_code == 401:
             raise TrelloUnauthorized(response.text)

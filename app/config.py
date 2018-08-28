@@ -8,7 +8,7 @@ class Config:
     PORT = os.environ.get("PORT", 5000)
     DEBUG = False
     TESTING = False
-    LOG_LEVEL = LOGLEVEL_WARNING
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", LOGLEVEL_WARNING)
 
     APP_NAME = "github-trello-powerup"
     SECRET_KEY = os.environ["SECRET_KEY"].encode("utf8")
