@@ -194,9 +194,12 @@ def dashboard():
         if github_status == "valid"
         else []
     )
+    
+    trello_board_ids = [board.id for board in (trello_client.get_boards() if trello_status == "valid" else [])]
 
     product_signoffs = (
-        ProductSignoff.query.filter(ProductSignoff.user == current_user).all() if trello_status == "valid" else []
+        ProductSignoff.query.filter(ProductSignoff.trello_board.has(TrelloBoard.id.in_(trello_board_ids)))
+        if trello_board_ids else []
     )
 
     return render_template(
