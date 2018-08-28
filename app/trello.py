@@ -33,7 +33,8 @@ class TrelloClient:
 
         current_app.logger.debug(f"Request settings: {method}, {path}, {params}")
         response = requests.request(method=method, url=f"{TrelloClient.TRELLO_API_ROOT}{path}", params=all_params)
-        current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
+        if current_app.config["DEBUG_PAYLOADS"]:
+            current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
 
         if response.status_code == 401:
             raise TrelloUnauthorized(response.text)

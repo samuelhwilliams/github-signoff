@@ -9,6 +9,7 @@ class Config:
     DEBUG = False
     TESTING = False
     LOG_LEVEL = os.environ.get("LOG_LEVEL", LOGLEVEL_WARNING)
+    DEBUG_PAYLOADS = os.environ.get("DEBUG_PAYLOADS", False)
 
     APP_NAME = "github-trello-powerup"
     SECRET_KEY = os.environ["SECRET_KEY"].encode("utf8")

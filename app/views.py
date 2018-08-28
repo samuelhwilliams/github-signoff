@@ -284,7 +284,8 @@ def github_callback():
     if request.headers["X-GitHub-Event"] == "ping":
         return jsonify(status="OK"), 200
 
-    current_app.logger.info(f"Incoming github payload: {request.json}")
+    if current_app.config["DEBUG_PAYLOADS"]:
+        current_app.logger.info(f"Incoming github payload: {request.json}")
 
     # if "unique_slug" not in request.args or "pull_request" not in request.json:  # TODO: should be abstracted somehow
     #     current_app.logger.info("Missing ‘unique_slug’ in query params or ‘pull_request’ in payload")
@@ -460,7 +461,10 @@ def integrate_trello_head():
 @main_blueprint.route("/trello/integration", methods=["POST"])
 def trello_callback():
     data = json.loads(request.get_data(as_text=True))
-    current_app.logger.debug(f"Incoming trello payload: {data}")
+    
+    if current_app.config["DEBUG_PAYLOADS"]:
+        current_app.logger.debug(f"Incoming trello payload: {data}")
+        
     if data.get("action", {}).get("type") == "updateCard":
         trello_card = TrelloCard.from_json(data["action"]["data"]["card"])
         if trello_card and trello_card.pull_requests:

@@ -45,7 +45,8 @@ class GithubClient:
             headers=self._default_headers(use_basic_auth=use_basic_auth),
             auth=self._default_auth(use_basic_auth=use_basic_auth),
         )
-        current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
+        if current_app.config["DEBUG_PAYLOADS"]:
+            current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
 
         if response.status_code == 401:
             raise GithubUnauthorized(response.text)
