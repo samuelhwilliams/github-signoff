@@ -19,11 +19,12 @@
               Can’t see the repository you’re looking for?
             </span>
           </summary>
+          <div class="govuk-details__text">Try the following:</div> 
+          <div class="govuk-details__text">1. You may not have admin permissions on the repository you’re looking for. Check on <a class="govuk-link" href="https://www.github.com">GitHub</a> that you have admin permissions to that repository.</div>
+          <div class="govuk-details__text">2. If the repository is owned by an organisation, your organisation may not allow access to this powerup. <a href="{{ config.GITHUB_APPLICATION_SETTINGS_URL }}" target="_blank">Check the organisation’s settings</a> to confirm that it’s repositories are accessible.</div>
           {% if owned_by_another_repos|length > 0 %}
-          <div class="govuk-details__text">Some of the repositories you have admin permissions on have already been connected to this powerup.</div>
+          <div class="govuk-details__text">3. Some of the repositories you have admin permissions on have already been connected to this powerup.</div>
           <div class="govuk-details__text"><a class="govuk-link" href="{{ url_for('.github_transfer_existing_repos') }}">Show repositories connected by other people</a></div>
-          {% else %}
-          <div class="govuk-details__text">You may not have admin permissions on the repository you’re looking for. Check on <a class="govuk-link" href="https://www.github.com">GitHub</a> that you have admin permissions to that repository.</div>
           {% endif %}
         </details>
       </fieldset>

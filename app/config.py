@@ -46,6 +46,8 @@ class Config:
         "&state={state}"
     )
     GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
+    GITHUB_APPLICATION_ID = "2d19768ca3d464d67172"
+    GITHUB_APPLICATION_SETTINGS_URL = f"https://github.com/settings/connections/applications/{GITHUB_APPLICATION_ID}"
 
 
 class DevConfig(Config):
