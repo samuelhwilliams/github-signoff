@@ -57,7 +57,7 @@ class Updater:
                             checklist_id=trello_card.trello_checklist.id, checkitem_id=trello_checkitem.id
                         )
 
-                db.session.delete(trello_card)
+                pull_request.trello_cards.remove(trello_card)
 
         db.session.add(pull_request)
         db.session.commit()
