@@ -132,9 +132,6 @@ class Updater:
 
         self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
 
-        db.session.add(pull_request)
-        db.session.commit()
-
         if pull_request.trello_cards:
             if self.user.checklist_feature_enabled:
                 self._update_trello_checklists(pull_request)
