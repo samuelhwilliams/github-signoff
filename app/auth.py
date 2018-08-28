@@ -1,7 +1,6 @@
 import base64
 from datetime import datetime
 import json
-import logging
 import uuid
 
 from cryptography.fernet import Fernet
@@ -10,9 +9,6 @@ from flask_login import login_user as _login_user, logout_user as _logout_user, 
 
 from app import login_manager
 from app.models import User, LoginToken
-
-
-logger = logging.getLogger(__name__)
 
 
 @login_manager.user_loader
@@ -83,15 +79,15 @@ def login_user(app, db, payload):
 
     elif token.user.id != payload_data["user_id"]:
         flash("Invalid token data", "error")
-        logger.warn("Invalid token data: ", token, token.guid, token.user.id, payload_data["user_id"])
+        app.logger.warn("Invalid token data: ", token, token.guid, token.user.id, payload_data["user_id"])
 
     elif token.consumed_at:
         flash("Token already used", "error")
-        logger.warn("Token already used: ", token, token.guid, token.consumed_at)
+        app.logger.warn("Token already used: ", token, token.guid, token.consumed_at)
 
     elif datetime.utcnow() >= token.expires_at:
         flash("Token expired", "error")
-        logger.warn("Token expired: ", token, token.guid, token.expires_at, datetime.utcnow(), token.created_at)
+        app.logger.warn("Token expired: ", token, token.guid, token.expires_at, datetime.utcnow(), token.created_at)
 
     else:
         token.consumed_at = datetime.utcnow()

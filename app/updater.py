@@ -1,4 +1,3 @@
-import logging
 import uuid
 from secrets import token_urlsafe
 
@@ -9,9 +8,6 @@ from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnu
 from app.errors import TrelloInvalidRequest, TrelloResourceMissing, GithubResourceMissing, GithubUnauthorized
 from app.models import GithubRepo, TrelloCard, TrelloList, TrelloChecklist, TrelloCheckitem, PullRequest
 from app.utils import get_github_client, get_trello_client, find_trello_card_ids_in_text
-
-
-logger = logging.getLogger(__name__)
 
 
 class Updater:
@@ -32,22 +28,29 @@ class Updater:
         )
 
         if response.status_code != 201:
-            logger.error(response, response.text)
+            self.app.logger.error(response, response.text)
 
     def _create_missing_trello_cards(self, pull_request, new_trello_card_ids):
-        logger.debug(f"new cards: {new_trello_card_ids}")
+        self.app.logger.debug(f"new cards: {new_trello_card_ids}")
         for card_id in new_trello_card_ids:
             try:
                 trello_card = self.trello_client.get_card(card_id)
             except TrelloInvalidRequest:
-                logger.warn(f"Ignoring invalid card {card_id}")
+                self.app.logger.warn(f"Ignoring invalid card {card_id}")
                 continue
 
-            trello_card.pull_requests = [pull_request]
-            db.session.add(trello_card)
+            trello_list = TrelloList.query.get(trello_card.list.id)
+
+            if trello_list:
+                self.app.logger.debug(f"Tracking {trello_card} through {trello_list}")
+                trello_card.pull_requests.append(pull_request)
+                db.session.add(trello_card)
+
+            else:
+                self.app.logger.debug(f"Skipping card {trello_card}: not in tracked list ({trello_list})")
 
     def _delete_removed_trello_cards(self, pull_request, removed_trello_card_ids):
-        logger.debug(f"old cards: {removed_trello_card_ids}")
+        self.app.logger.debug(f"old cards: {removed_trello_card_ids}")
         for card_id in removed_trello_card_ids:
             old_trello_card = TrelloCard.query.filter(TrelloCard.id == card_id).one()
 
@@ -67,7 +70,7 @@ class Updater:
         existing_trello_card_ids = {
             card.id for card in TrelloCard.query.filter(TrelloCard.pull_requests.contains(pull_request)).all()
         }
-        logger.debug(existing_trello_card_ids)
+        self.app.logger.debug(existing_trello_card_ids)
 
         self._create_missing_trello_cards(pull_request, all_trello_card_ids - existing_trello_card_ids)
         self._delete_removed_trello_cards(pull_request, existing_trello_card_ids - all_trello_card_ids)
@@ -182,7 +185,7 @@ class Updater:
             try:
                 self.github_client.delete_webhook(repo.id, repo.hook_id)
             except (GithubResourceMissing, GithubUnauthorized) as e:
-                logger.warn(f"Unable to delete hook for {repo}: {e}")
+                self.app.logger.warn(f"Unable to delete hook for {repo}: {e}")
 
             db.session.delete(repo)
             flash(f"This powerup is no longer monitoring the ‘{repo.fullname}’ repository.", "warning")

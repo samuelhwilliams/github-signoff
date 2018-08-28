@@ -1,11 +1,9 @@
-import logging
 import requests
+
+from flask import current_app
 
 from app.models import TrelloBoard, TrelloList, TrelloCard, TrelloChecklist, TrelloCheckitem
 from app.errors import TrelloUnauthorized, HookAlreadyExists, TrelloInvalidRequest, TrelloResourceMissing
-
-
-logger = logging.getLogger(__name__)
 
 
 BOARD_FIELD_PARAMS = {"board": "true", "board_fields": "id,name"}
@@ -46,7 +44,7 @@ class TrelloClient:
                 response.raise_for_status()
 
             except requests.exceptions.HTTPError as e:
-                logger.error(f"{method}, {path}, {params}")
+                current_app.logger.error(f"{method}, {path}, {params}")
                 raise TrelloInvalidRequest(source=e)
 
         return response

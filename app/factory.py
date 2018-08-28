@@ -1,3 +1,4 @@
+from logging import WARNING as LOGLEVEL_WARNING
 import os
 
 from flask import Flask
@@ -20,5 +21,8 @@ def create_app():
     login_manager.login_view = ".start_page"
 
     app.register_blueprint(main_blueprint)
+
+    app.logger.setLevel(app.config.get("LOG_LEVEL", LOGLEVEL_WARNING))
+    print(app.logger)
 
     return app

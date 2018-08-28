@@ -1,12 +1,10 @@
-import logging
 import os
 import re
 
+from flask import current_app
+
 from app.github import GithubClient
 from app.trello import TrelloClient
-
-
-logger = logging.getLogger(__name__)
 
 
 def coerce_boolean_or_error(key, value):
@@ -44,7 +42,7 @@ def get_trello_client(app, user):
 def find_trello_card_ids_in_text(text):
     urls = re.findall(r"(?:https?://)?(?:www.)?trello.com/c/\w+\b", text)
     card_ids = {os.path.basename(url) for url in urls}
-    logger.debug(f"Found trello cards: {card_ids}")
+    current_app.logger.debug(f"Found trello cards: {card_ids}")
     return card_ids
 
 

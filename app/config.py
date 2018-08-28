@@ -1,3 +1,4 @@
+from logging import WARNING as LOGLEVEL_WARNING, DEBUG as LOGLEVEL_DEBUG
 import os
 from datetime import timedelta
 
@@ -7,6 +8,7 @@ class Config:
     PORT = os.environ.get("PORT", 5000)
     DEBUG = False
     TESTING = False
+    LOG_LEVEL = LOGLEVEL_WARNING
 
     APP_NAME = "github-trello-powerup"
     SECRET_KEY = os.environ["SECRET_KEY"].encode("utf8")
@@ -51,6 +53,7 @@ class DevConfig(Config):
     DEBUG = True
     SQLALCHEMY_ECHO = True
     CSRF_ENABLED = False
+    LOG_LEVEL = LOGLEVEL_DEBUG
 
 
 class TestConfig(DevConfig):

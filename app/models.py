@@ -1,13 +1,10 @@
 from datetime import datetime, timedelta
-import logging
 
+from flask import current_app
 from sqlalchemy.orm import backref
 
 from app import db
 from app.constants import StatusEnum
-
-
-logger = logging.getLogger(__name__)
 
 
 class LoginToken(db.Model):
@@ -136,7 +133,7 @@ class GithubRepo(db.Model):
 
         self.id = data["id"]
         self.fullname = data["full_name"]
-        logger.debug(f"Created new repo {self}")
+        current_app.logger.debug(f"Created new repo {self}")
 
         return self
 
@@ -187,7 +184,7 @@ class PullRequest(db.Model):
         self.body = data["body"]
         self.state = data["state"]  # TODO: fix this conflcit with enum
 
-        logger.debug(f"Created new pull request {self}")
+        current_app.logger.debug(f"Created new pull request {self}")
 
         return self
 

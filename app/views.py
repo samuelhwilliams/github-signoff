@@ -2,7 +2,6 @@ from functools import wraps
 import hashlib
 import hmac
 import json
-import logging
 import uuid
 
 from flask import (
@@ -57,7 +56,6 @@ from app.utils import get_github_client, get_trello_client, get_github_token_sta
 
 main_blueprint = Blueprint("main", "main")
 default_breadcrumb_root(main_blueprint, ".")
-logger = logging.getLogger(__name__)
 
 
 @main_blueprint.errorhandler(TrelloUnauthorized)
@@ -278,26 +276,30 @@ def github_callback():
     if request.headers["X-GitHub-Event"] == "ping":
         return jsonify(status="OK"), 200
 
-    print("Incoming github payload: ", request.json)
+    current_app.logger.info(f"Incoming github payload: {request.json}")
 
-    if "unique_slug" not in request.args:  # TODO: should be abstracted somehow
-        return jsonify(status="UNKNOWN"), 400
+    # if "unique_slug" not in request.args or "pull_request" not in request.json:  # TODO: should be abstracted somehow   
+    #     current_app.logger.info("Missing ‘unique_slug’ in query params or ‘pull_request’ in payload")
+    #     return jsonify(status="OK"), 200
 
     payload = request.json["pull_request"]
     repo_id = payload["head"]["repo"]["id"]
 
     github_repo = GithubRepo.query.get(repo_id)
     if not github_repo:
+        current_app.logger.info("No github_repo found in database")
         return jsonify(status="GONE"), 410
 
-    if github_repo.hook_unique_slug != request.args["unique_slug"]:
-        return jsonify(status="BAD SLUG"), 400
+    # if github_repo.hook_unique_slug != request.args["unique_slug"]:
+    #     current_app.logger.info("Mis-match on hook’s unique slug")
+    #     return jsonify(status="BAD SLUG"), 400
 
-    print(request.headers["X-Hub-Signature"])  # TODO: Authentication via github_repo.hook_secret
-    verify_signature = 'sha1=' + hmac.new(github_repo.hook_secret.encode('utf8'), request.data, hashlib.sha1).hexdigest()
-    print(verify_signature)
-    if not hmac.compare_digest(request.headers["X-Hub-Signature"], verify_signature):
-        return jsonify(status="OK"), 200
+    # verify_signature = (
+    #     "sha1=" + hmac.new(github_repo.hook_secret.encode("utf8"), request.data, hashlib.sha1).hexdigest()
+    # )
+    # if not hmac.compare_digest(request.headers["X-Hub-Signature"], verify_signature):
+    #     current_app.logger.info("X-Hub-Signature verification failed")
+    #     return jsonify(status="OK"), 200
 
     updater = Updater(current_app, db, github_repo.integration.user)
     updater.sync_pull_request(data=payload)
@@ -543,24 +545,25 @@ def trello_product_signoff():
         TrelloList.id.in_([list_ for list_ in all_trello_lists_to_boards.keys()])
     ).all()
     trello_boards_and_lists = {all_trello_lists_to_boards[list_.id]: list_ for list_ in existing_trello_lists}
-    
+
     can_connect_more_boards = len(all_trello_boards) > len(trello_boards_and_lists.keys())
-    return render_template("features/signoff/product-signoff.html", trello_boards_and_lists=trello_boards_and_lists, can_connect_more_boards=can_connect_more_boards)
+    return render_template(
+        "features/signoff/product-signoff.html",
+        trello_boards_and_lists=trello_boards_and_lists,
+        can_connect_more_boards=can_connect_more_boards,
+    )
 
 
 def get_board_name(*args, **kwargs):
     board_id = request.view_args["board_id"]
     trello_client = get_trello_client(current_app, current_user)
     board = trello_client.get_board(board_id)
-    return [{"text": board.name, "url": url_for('.trello_manage_product_signoff', board_id=board_id)}]
+    return [{"text": board.name, "url": url_for(".trello_manage_product_signoff", board_id=board_id)}]
 
 
 @main_blueprint.route("/trello/product-signoff/<board_id>")
 @register_breadcrumb(
-    main_blueprint,
-    ".trello_product_signoff.trello_manage_product_signoff",
-    '',
-    dynamic_list_constructor=get_board_name,
+    main_blueprint, ".trello_product_signoff.trello_manage_product_signoff", "", dynamic_list_constructor=get_board_name
 )
 @login_required
 def trello_manage_product_signoff(board_id):
@@ -580,7 +583,9 @@ def trello_manage_product_signoff(board_id):
 
 
 @main_blueprint.route("/trello/product-signoff/<board_id>/delete", methods=["GET", "POST"])
-@register_breadcrumb(main_blueprint, ".trello_product_signoff.trello_manage_product_signoff.trello_delete_signoff_check", "Delete check")
+@register_breadcrumb(
+    main_blueprint, ".trello_product_signoff.trello_manage_product_signoff.trello_delete_signoff_check", "Delete check"
+)
 @login_required
 def trello_delete_signoff_check(board_id):
     delete_product_signoff_form = DeleteProductSignoffForm()
