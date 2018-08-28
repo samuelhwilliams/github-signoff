@@ -37,7 +37,7 @@ class Config:
 
     GITHUB_CLIENT_ID = os.environ["GITHUB_CLIENT_ID"]
     GITHUB_CLIENT_SECRET = os.environ["GITHUB_CLIENT_SECRET"]
-    GITHUB_OAUTH_SETTINGS = dict(client_id=GITHUB_CLIENT_ID, scope="admin:repo_hook, repo:status")
+    GITHUB_OAUTH_SETTINGS = dict(client_id=GITHUB_CLIENT_ID, scope="admin:repo_hook, repo")
     GITHUB_OAUTH_URL = (
         "https://github.com/login/oauth/authorize"
         "?client_id={client_id}"
