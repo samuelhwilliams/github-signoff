@@ -64,11 +64,11 @@ class Updater:
 
     def _update_trello_checklists(self, pull_request):
         trello_cards = pull_request.trello_cards
-        print("update trello checklists: ", trello_cards)
-        print([t.trello_checklist for t in trello_cards])
+        self.app.logger.debug(f"Updating trello checklists for {pull_request}")
+        self.app.logger.debug(f"These cards involvd: {trello_cards}")
 
         for i, trello_card in enumerate(trello_cards):
-            print(f"trello card #{i}: {trello_card}")
+            self.app.logger.debug(f"trello card #{i}: {trello_card}")
             trello_card.hydrate(trello_client=self.trello_client)
 
             trello_checklist = trello_card.trello_checklist
@@ -159,6 +159,9 @@ class Updater:
 
         self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
         self._update_pull_request_status(pull_request)
+
+        if self.user.checklist_feature_enabled:
+            self._update_trello_checklists(pull_request)
 
     def sync_repositories(self, chosen_repo_ids):
         print(chosen_repo_ids)
