@@ -460,12 +460,15 @@ def integrate_trello_head():
 @main_blueprint.route("/trello/integration", methods=["POST"])
 def trello_callback():
     data = json.loads(request.get_data(as_text=True))
-    print("Incoming trello payload: ", data)
+    current_app.logger.debug(f"Incoming trello payload: {data}")
     if data.get("action", {}).get("type") == "updateCard":
         trello_card = TrelloCard.from_json(data["action"]["data"]["card"])
         if trello_card and trello_card.pull_requests:
             updater = Updater(current_app, db, trello_card.pull_requests[0].repo.integration.user)
             updater.sync_trello_card(trello_card)
+        
+    else:
+        current_app.logger.debug("Ignoring payload: not an `updateCard`")
 
     return jsonify(status="OK"), 200
 

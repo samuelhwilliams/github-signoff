@@ -134,30 +134,31 @@ class Updater:
 
         db.session.commit()
 
-    def sync_pull_request(self, data):
-        pull_request = PullRequest.from_json(data=data)
-
-        trello_cards = get_trello_cards_from_text(trello_client=self.trello_client, text=pull_request.body)
-
-        self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
-
+    def _update_pull_request_status(self, pull_request):
+        self.app.logger.debug(f"Updating for {pull_request}")
         if pull_request.trello_cards:
-            if self.user.checklist_feature_enabled:
-                self._update_trello_checklists(pull_request)
-
             signed_off_count, required_signoffs_count = 0, 0
             for trello_card in pull_request.trello_cards:
+                # TODO: Fix hydration here - O(n^2) API calls in worst case.
+                trello_card.hydrate(trello_client=self.trello_client)
                 if TrelloBoard.query.get(trello_card.board.id):
                     required_signoffs_count += 1
 
                     if TrelloList.query.get(trello_card.list.id):
                         signed_off_count += 1
 
-            total_required_count = len(pull_request.trello_cards)
-            if signed_off_count < total_required_count:
+            self.app.logger.debug(f"Required: {required_signoffs_count}, actual: {signed_off_count}")
+            if signed_off_count < required_signoffs_count:
                 self._set_pull_request_status(pull_request, StatusEnum.PENDING.value)
             else:
                 self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
+
+    def sync_pull_request(self, data):
+        pull_request = PullRequest.from_json(data=data)
+        trello_cards = get_trello_cards_from_text(trello_client=self.trello_client, text=pull_request.body)
+
+        self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
+        self._update_pull_request_status(pull_request)
 
     def sync_repositories(self, chosen_repo_ids):
         print(chosen_repo_ids)
@@ -231,21 +232,12 @@ class Updater:
         )
 
     def sync_trello_card(self, trello_card):
+        self.app.logger.debug(f"Starting sync_trello_card for {trello_card}")
+
         if not trello_card.pull_requests:
+            self.app.logger.debug("No pull requests - skipping")
             return
 
         for pull_request in trello_card.pull_requests:
             pull_request.hydrate(github_client=self.github_client)
-            signed_off_count = 0
-
-            for sub_trello_card in pull_request.trello_cards:
-                sub_trello_card.hydrate(trello_client=self.trello_client)  # TODO: optimise me
-                trello_list = TrelloList.query.get(sub_trello_card.list.id)
-
-                if trello_list:
-                    signed_off_count += 1
-
-            if signed_off_count < len(pull_request.trello_cards):
-                self._set_pull_request_status(pull_request=pull_request, status=StatusEnum.PENDING.value)
-            else:
-                self._set_pull_request_status(pull_request=pull_request, status=StatusEnum.SUCCESS.value)
+            self._update_pull_request_status(pull_request)
