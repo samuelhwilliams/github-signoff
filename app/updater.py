@@ -7,7 +7,7 @@ from app import db, sparkpost
 from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum
 from app.errors import TrelloInvalidRequest, TrelloResourceMissing, GithubResourceMissing, GithubUnauthorized
 from app.models import GithubRepo, TrelloCard, TrelloList, TrelloChecklist, TrelloCheckitem, PullRequest
-from app.utils import get_github_client, get_trello_client, find_trello_card_ids_in_text
+from app.utils import get_github_client, get_trello_client, get_trello_cards_from_text
 
 
 class Updater:
@@ -30,53 +30,31 @@ class Updater:
         if response.status_code != 201:
             self.app.logger.error(response, response.text)
 
-    def _create_missing_trello_cards(self, pull_request, new_trello_card_ids):
-        self.app.logger.debug(f"new cards: {new_trello_card_ids}")
-        for card_id in new_trello_card_ids:
-            try:
-                trello_card = self.trello_client.get_card(card_id)
-            except TrelloInvalidRequest:
-                self.app.logger.warn(f"Ignoring invalid card {card_id}")
-                continue
+    def _update_tracked_trello_cards(self, pull_request, new_trello_cards):
+        self.app.logger.debug(f"Existing cards: {pull_request.trello_cards}")
 
-            trello_list = TrelloList.query.get(trello_card.list.id)
+        for trello_card in pull_request.trello_cards:
+            if trello_card not in new_trello_cards:
+                if trello_card.trello_checklist:
+                    trello_checkitem = TrelloCheckitem.query.filter(
+                        TrelloCheckitem.checklist == trello_card.trello_checklist,
+                        TrelloCheckitem.pull_request == pull_request,
+                    ).one_or_none()
 
-            if trello_list:
-                self.app.logger.debug(f"Tracking {trello_card} through {trello_list}")
-                trello_card.pull_requests.append(pull_request)
-                db.session.add(trello_card)
+                    if trello_checkitem:
+                        self.trello_client.delete_checkitem(
+                            checklist_id=trello_card.trello_checklist.id, checkitem_id=trello_checkitem.id
+                        )
 
-            else:
-                self.app.logger.debug(f"Skipping card {trello_card}: not in tracked list ({trello_list})")
+                db.session.delete(trello_card)
 
-    def _delete_removed_trello_cards(self, pull_request, removed_trello_card_ids):
-        self.app.logger.debug(f"old cards: {removed_trello_card_ids}")
-        for card_id in removed_trello_card_ids:
-            old_trello_card = TrelloCard.query.filter(TrelloCard.id == card_id).one()
+        pull_request.trello_cards = new_trello_cards
 
-            if old_trello_card.trello_checklist:
-                trello_checkitem = TrelloCheckitem.query.filter(
-                    TrelloCheckitem.checklist == old_trello_card.trello_checklist,
-                    TrelloCheckitem.pull_request == pull_request,
-                ).one_or_none()
-                if trello_checkitem:
-                    self.trello_client.delete_checkitem(
-                        checklist_id=old_trello_card.trello_checklist.id, checkitem_id=trello_checkitem.id
-                    )
-            db.session.delete(old_trello_card)
-
-    def _update_tracked_trello_cards(self, pull_request):
-        all_trello_card_ids = find_trello_card_ids_in_text(pull_request.body)
-        existing_trello_card_ids = {
-            card.id for card in TrelloCard.query.filter(TrelloCard.pull_requests.contains(pull_request)).all()
-        }
-        self.app.logger.debug(existing_trello_card_ids)
-
-        self._create_missing_trello_cards(pull_request, all_trello_card_ids - existing_trello_card_ids)
-        self._delete_removed_trello_cards(pull_request, existing_trello_card_ids - all_trello_card_ids)
+        db.session.add(pull_request)
+        db.session.commit()
 
     def _update_trello_checklists(self, pull_request):
-        trello_cards = TrelloCard.query.filter(TrelloCard.pull_requests.contains(pull_request)).all()
+        trello_cards = pull_request.trello_cards
         print("update trello checklists: ", trello_cards)
         print([t.trello_checklist for t in trello_cards])
 
@@ -150,7 +128,9 @@ class Updater:
     def sync_pull_request(self, data):
         pull_request = PullRequest.from_json(data=data)
 
-        self._update_tracked_trello_cards(pull_request=pull_request)
+        trello_cards = get_trello_cards_from_text(trello_client=self.trello_client, text=pull_request.body)
+
+        self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
 
         db.session.add(pull_request)
         db.session.commit()
@@ -159,18 +139,23 @@ class Updater:
             if self.user.checklist_feature_enabled:
                 self._update_trello_checklists(pull_request)
 
-            signed_off_count = 0
-            for trello_card in pull_request.trello_cards:
-                trello_list = TrelloList.query.get(self.trello_client.get_card(trello_card.id).list.id)
+            # FIXME: Need smarter logic here to determine if the pull request needs a status check
+            # Probably need to have a TrelloBoard model.
+            count = TrelloList.query.filter(TrelloList.integration == self.user.trello_integration).count()
+            print(f"Found trello cards for user: {count}")
+            if count:
+                signed_off_count = 0
+                for trello_card in pull_request.trello_cards:
+                    trello_list = TrelloList.query.get(self.trello_client.get_card(trello_card.id).list.id)
 
-                if trello_list:
-                    signed_off_count += 1
+                    if trello_list:
+                        signed_off_count += 1
 
-            total_required_count = len(pull_request.trello_cards)
-            if signed_off_count < total_required_count:
-                self._set_pull_request_status(pull_request, StatusEnum.PENDING.value)
-            else:
-                self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
+                total_required_count = len(pull_request.trello_cards)
+                if signed_off_count < total_required_count:
+                    self._set_pull_request_status(pull_request, StatusEnum.PENDING.value)
+                else:
+                    self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
 
     def sync_repositories(self, chosen_repo_ids):
         print(chosen_repo_ids)

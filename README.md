@@ -11,6 +11,9 @@ A powerup for integrating GitHub and Trello, with the following features:
 * Yarn (v1.9.4)
 
 ## TODO / Tech debt
+* let users choose whether they need to give permissions for private repositories (`repo` scope for private vs `repo:status` for public)
+* FIXME: Need smarter logic here to determine if the pull request needs a status check
+    * Probably need to have a TrelloBoard model. And/or a boolean to flip the checks on/off?
 * !!! trello callback URLs need to contain a secret for callback authentication !!!
 * check that webhooks exist when going to /github/choose-repos
 * Fix browser console errors

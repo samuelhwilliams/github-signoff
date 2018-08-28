@@ -3,6 +3,7 @@ import re
 
 from flask import current_app
 
+from app.errors import TrelloInvalidRequest, TrelloResourceMissing
 from app.github import GithubClient
 from app.trello import TrelloClient
 
@@ -39,11 +40,23 @@ def get_trello_client(app, user):
     return TrelloClient(key=app.config["TRELLO_API_KEY"], user=user)
 
 
-def find_trello_card_ids_in_text(text):
+def get_trello_cards_from_text(trello_client, text):
     urls = re.findall(r"(?:https?://)?(?:www.)?trello.com/c/\w+\b", text)
     card_ids = {os.path.basename(url) for url in urls}
-    current_app.logger.debug(f"Found trello cards: {card_ids}")
-    return card_ids
+
+    trello_cards = []
+    for card_id in card_ids:
+        try:
+            trello_card = trello_client.get_card(card_id)
+
+        except (TrelloInvalidRequest, TrelloResourceMissing):
+            current_app.logger.warn(f"Ignoring invalid card {card_id}")
+            continue
+
+        trello_cards.append(trello_card)
+
+    current_app.logger.debug(f"Found trello cards: {trello_cards}")
+    return trello_cards
 
 
 def get_github_token_status(app, user):
