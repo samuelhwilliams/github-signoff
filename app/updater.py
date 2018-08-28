@@ -41,9 +41,11 @@ class Updater:
 
     def _update_tracked_trello_cards(self, pull_request, new_trello_cards):
         self.app.logger.debug(f"Existing cards: {pull_request.trello_cards}")
+        
+        new_trello_card_ids = {card.id for card in new_trello_cards}
 
         for trello_card in pull_request.trello_cards:
-            if trello_card not in new_trello_cards:
+            if trello_card.id not in new_trello_card_ids:
                 if trello_card.trello_checklist:
                     trello_checkitem = TrelloCheckitem.query.filter(
                         TrelloCheckitem.checklist == trello_card.trello_checklist,
@@ -56,8 +58,6 @@ class Updater:
                         )
 
                 db.session.delete(trello_card)
-
-        pull_request.trello_cards = new_trello_cards
 
         db.session.add(pull_request)
         db.session.commit()
