@@ -195,12 +195,14 @@ def dashboard():
         else []
     )
     
-    trello_board_ids = [board.id for board in (trello_client.get_boards() if trello_status == "valid" else [])]
+    product_signoffs = []
+    if trello_status == "valid":
+        trello_client = get_trello_client(current_app, current_user)
+        trello_board_ids = [board.id for board in trello_client.get_boards()]
 
-    product_signoffs = (
-        ProductSignoff.query.filter(ProductSignoff.trello_board.has(TrelloBoard.id.in_(trello_board_ids)))
-        if trello_board_ids else []
-    )
+        product_signoffs = (
+            ProductSignoff.query.filter(ProductSignoff.trello_board.has(TrelloBoard.id.in_(trello_board_ids))).all()
+        )
 
     return render_template(
         "dashboard.html",
