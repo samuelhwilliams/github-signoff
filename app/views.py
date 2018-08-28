@@ -48,7 +48,17 @@ from app.forms import (
     TransferGithubRepoForm,
 )
 from app.github import GithubClient
-from app.models import GithubRepo, LoginToken, TrelloCard, TrelloList, User, GithubIntegration, TrelloIntegration
+from app.models import (
+    GithubRepo,
+    LoginToken,
+    TrelloBoard,
+    TrelloCard,
+    TrelloList,
+    User,
+    GithubIntegration,
+    TrelloIntegration,
+    ProductSignoff,
+)
 from app.trello import TrelloClient
 from app.updater import Updater
 from app.utils import get_github_client, get_trello_client, get_github_token_status, get_trello_token_status
@@ -185,10 +195,8 @@ def dashboard():
         else []
     )
 
-    trello_lists = (
-        TrelloList.query.filter(TrelloList.integration == current_user.trello_integration).all()
-        if trello_status == "valid"
-        else []
+    product_signoffs = (
+        ProductSignoff.query.filter(ProductSignoff.user == current_user).all() if trello_status == "valid" else []
     )
 
     return render_template(
@@ -196,7 +204,7 @@ def dashboard():
         github_status=github_status,
         trello_status=trello_status,
         github_repos=github_repos,
-        trello_lists=trello_lists,
+        product_signoffs=product_signoffs,
     )
 
 
@@ -278,7 +286,7 @@ def github_callback():
 
     current_app.logger.info(f"Incoming github payload: {request.json}")
 
-    # if "unique_slug" not in request.args or "pull_request" not in request.json:  # TODO: should be abstracted somehow   
+    # if "unique_slug" not in request.args or "pull_request" not in request.json:  # TODO: should be abstracted somehow
     #     current_app.logger.info("Missing ‘unique_slug’ in query params or ‘pull_request’ in payload")
     #     return jsonify(status="OK"), 200
 
@@ -488,16 +496,10 @@ def authorize_trello_complete():
     authorize_form = AuthorizeTrelloForm()
 
     if authorize_form.validate_on_submit():
-        if not current_user.trello_integration:
-            current_user.trello_integration = TrelloIntegration()
-
-        current_user.trello_integration.oauth_token = authorize_form.trello_integration.data
+        current_user.trello_integration = TrelloIntegration(oauth_token=authorize_form.trello_integration.data)
 
         trello_client = get_trello_client(current_app, current_user)
         if trello_client.is_token_valid():
-            # Delete any lists from a user's old/expired/revoked tokens
-            TrelloList.query.filter(TrelloList.integration == current_user.trello_integration).delete()
-
             db.session.add(current_user)
             db.session.commit()
 
@@ -534,78 +536,90 @@ def revoke_trello():
 @login_required
 def trello_product_signoff():
     trello_client = get_trello_client(current_app, current_user)
-    all_trello_boards = trello_client.get_boards(with_lists=True)
+    all_trello_boards_json = trello_client.get_boards(with_lists=True, as_json=True)
+    all_trello_boards_by_id = {board_json["id"]: board_json for board_json in all_trello_boards_json}
 
-    all_trello_lists_to_boards = {}
-    for trello_board in all_trello_boards:
-        for trello_list in trello_board.lists:
-            all_trello_lists_to_boards[trello_list.id] = trello_board
-
-    existing_trello_lists = TrelloList.query.filter(
-        TrelloList.id.in_([list_ for list_ in all_trello_lists_to_boards.keys()])
+    existing_product_signoff_checks = ProductSignoff.query.filter(
+        ProductSignoff.trello_board.has(TrelloBoard.id.in_(all_trello_boards_by_id.keys()))
     ).all()
-    trello_boards_and_lists = {all_trello_lists_to_boards[list_.id]: list_ for list_ in existing_trello_lists}
 
-    can_connect_more_boards = len(all_trello_boards) > len(trello_boards_and_lists.keys())
+    for product_signoff in existing_product_signoff_checks:
+        product_signoff.hydrate_from_board_json(all_trello_boards_by_id[product_signoff.trello_board.id])
+
     return render_template(
         "features/signoff/product-signoff.html",
-        trello_boards_and_lists=trello_boards_and_lists,
-        can_connect_more_boards=can_connect_more_boards,
+        existing_product_signoff_checks=existing_product_signoff_checks,
+        can_connect_more_boards=len(all_trello_boards_json) > len(existing_product_signoff_checks),
     )
 
 
 def get_board_name(*args, **kwargs):
-    board_id = request.view_args["board_id"]
+    signoff_id = request.view_args["signoff_id"]
+    product_signoff = ProductSignoff.query.filter(ProductSignoff.id == signoff_id).one()
     trello_client = get_trello_client(current_app, current_user)
-    board = trello_client.get_board(board_id)
-    return [{"text": board.name, "url": url_for(".trello_manage_product_signoff", board_id=board_id)}]
+    board = trello_client.get_board(product_signoff.trello_board_id)
+    return [{"text": board.name, "url": url_for(".trello_manage_product_signoff", signoff_id=signoff_id)}]
 
 
-@main_blueprint.route("/trello/product-signoff/<board_id>")
+@main_blueprint.route("/trello/product-signoff/<signoff_id>")
 @register_breadcrumb(
-    main_blueprint, ".trello_product_signoff.trello_manage_product_signoff", "", dynamic_list_constructor=get_board_name
-)
+    main_blueprint, ".trello_product_signoff.trello_manage_product_signoff", "", dynamic_list_constructor=get_board_name)
 @login_required
-def trello_manage_product_signoff(board_id):
+def trello_manage_product_signoff(signoff_id):
     trello_client = get_trello_client(current_app, current_user)
-    trello_board = trello_client.get_board(board_id)
-    trello_lists = trello_client.get_lists(trello_board.board_id)
-    trello_list = TrelloList.query.filter(TrelloList.id.in_([l.id for l in trello_lists])).one()
-    trello_list.hydrate(trello_client=trello_client)
+    product_signoff = ProductSignoff.query.filter(
+        ProductSignoff.id == signoff_id
+    ).one_or_none()
+    if not product_signoff:
+        flash("No such board")
+        return redirect(url_for(".trello_product_signoff")), 404
 
-    if trello_list.integration != current_user.trello_integration:
+    elif product_signoff.user != current_user:
         flash("That product signoff check is owned by another person")
         return redirect(url_for(".trello_product_signoff")), 403
 
-    return render_template(
-        "features/signoff/manage-product-signoff.html", trello_board=trello_board, trello_list=trello_list
-    )
+    product_signoff.hydrate(trello_client)
+
+    return render_template("features/signoff/manage-product-signoff.html", product_signoff=product_signoff)
 
 
-@main_blueprint.route("/trello/product-signoff/<board_id>/delete", methods=["GET", "POST"])
+@main_blueprint.route("/trello/product-signoff/<signoff_id>/delete", methods=["GET", "POST"])
 @register_breadcrumb(
     main_blueprint, ".trello_product_signoff.trello_manage_product_signoff.trello_delete_signoff_check", "Delete check"
 )
 @login_required
-def trello_delete_signoff_check(board_id):
+def trello_delete_signoff_check(signoff_id):
     delete_product_signoff_form = DeleteProductSignoffForm()
 
     trello_client = get_trello_client(current_app, current_user)
-    trello_board = trello_client.get_board(board_id)
+
+    product_signoff = ProductSignoff.query.filter(
+        ProductSignoff.id == signoff_id
+    ).one_or_none()
+    if not product_signoff:
+        flash("No such product signoff")
+        return redirect(url_for(".trello_product_signoff")), 404
+
+    elif product_signoff.user != current_user:
+        flash("That product signoff check is owned by another person")
+        return redirect(url_for(".trello_product_signoff")), 403
+
+    product_signoff.hydrate(trello_client)
 
     if delete_product_signoff_form.validate_on_submit():
-        trello_lists = trello_client.get_lists(trello_board.board_id)
-        trello_list = TrelloList.query.filter(TrelloList.id.in_([l.id for l in trello_lists])).one()
-
         try:
-            trello_client.delete_webhook(trello_list.hook_id)
+            trello_client.delete_webhook(product_signoff.trello_list.hook_id)
+
         except TrelloResourceMissing:
             pass
 
-        db.session.delete(trello_list)
+        flash(
+            f"You have deleted the product sign-off check on the ‘{product_signoff.trello_board.name}’ board.",
+            "warning",
+        )
+        db.session.delete(product_signoff)
         db.session.commit()
 
-        flash(f"You have deleted the product sign-off check on the ‘{trello_board.name}’ board.", "warning")
         return redirect(url_for(".trello_product_signoff"))
 
     elif delete_product_signoff_form.errors:
@@ -615,7 +629,7 @@ def trello_delete_signoff_check(board_id):
     return render_template(
         "features/signoff/delete-product-signoff.html",
         delete_product_signoff_form=delete_product_signoff_form,
-        trello_board=trello_board,
+        product_signoff=product_signoff,
     )
 
 
@@ -624,20 +638,15 @@ def trello_delete_signoff_check(board_id):
 @login_required
 def trello_choose_board():
     trello_client = get_trello_client(current_app, current_user)
-    trello_boards = trello_client.get_boards(with_lists=True)
+    all_trello_boards = trello_client.get_boards(with_lists=True)
+    all_trello_boards_by_id = {board.id: board for board in all_trello_boards}
 
-    all_trello_lists_to_boards = {}
-    for trello_board in trello_boards:
-        for trello_list in trello_board.lists:
-            all_trello_lists_to_boards[trello_list.id] = trello_board
-
-    existing_trello_lists = TrelloList.query.filter(
-        TrelloList.id.in_([id_ for id_ in all_trello_lists_to_boards])
+    existing_product_signoff_checks = ProductSignoff.query.filter(
+        ProductSignoff.trello_board.has(TrelloBoard.id.in_(all_trello_boards_by_id.keys()))
     ).all()
+    existing_trello_board_ids = {product_signoff.trello_board.id for product_signoff in existing_product_signoff_checks}
 
-    existing_trello_boards = {all_trello_lists_to_boards[id_] for id_ in [list_.id for list_ in existing_trello_lists]}
-
-    available_trello_boards = list(filter(lambda x: x not in existing_trello_boards, trello_boards))
+    available_trello_boards = [board for board in all_trello_boards if board.id not in existing_trello_board_ids]
 
     board_form = ChooseTrelloBoardForm(available_trello_boards)
 
@@ -655,36 +664,39 @@ def trello_choose_board():
 @register_breadcrumb(main_blueprint, ".trello_product_signoff.trello_choose_list", "Choose Trello list")
 @login_required
 def trello_choose_list():
-    if "board_id" not in request.args:
+    board_id = request.args.get("board_id", None)
+    if not board_id:
         flash("Please select a Trello board.")
         return redirect(".trello_choose_board")
 
-    trello_client = get_trello_client(current_app, current_user)
-
-    trello_lists_for_board = trello_client.get_lists(board_id=request.args["board_id"])
-    if TrelloList.query.filter(TrelloList.id.in_([l.id for l in trello_lists_for_board])).one_or_none():
+    if ProductSignoff.query.filter(ProductSignoff.trello_board.has(TrelloBoard.id == board_id)).count():
         flash("Product sign-off checks are already enabled for that board.", "warning")
         return redirect(url_for(".trello_product_signoff"))
 
-    list_form = ChooseTrelloListForm(trello_client.get_lists(board_id=request.args["board_id"]))
+    trello_client = get_trello_client(current_app, current_user)
+    trello_lists = trello_client.get_lists(board_id=request.args["board_id"])
+
+    list_form = ChooseTrelloListForm(trello_lists)
 
     if list_form.validate_on_submit():
-        list_choices = dict(list_form.list_choice.choices)  # refactor
+        list_id = list_form.list_choice.data
         try:
             trello_hook = trello_client.create_webhook(
-                object_id=list_form.list_choice.data, callback_url=f"{url_for('.trello_callback', _external=True)}"
+                object_id=list_id,
+                callback_url="https://github-trello-powerup.herokuapp.com/trello/integration",  # FIXME
             )
 
         except HookAlreadyExists:
-            trello_hook = trello_client.get_webhook(object_id=list_form.list_choice.data)
+            trello_hook = trello_client.get_webhook(object_id=list_id)
 
-        trello_list = TrelloList(
-            id=list_form.list_choice.data, hook_id=trello_hook["id"], integration=current_user.trello_integration
-        )
-        db.session.add(trello_list)
+        trello_board = TrelloBoard.from_json(trello_client.get_board(board_id, as_json=True))
+        trello_list = TrelloList.from_json(trello_client.get_list(list_id, as_json=True))
+        trello_list.hook_id = trello_hook["id"]
+        product_signoff = ProductSignoff(user=current_user, trello_board=trello_board, trello_list=trello_list)
+        db.session.add(product_signoff)
         db.session.commit()
 
-        flash((f"Product sign-off checks added to the “{list_choices.get(list_form.list_choice.data)}” board."), "info")
+        flash((f"Product sign-off checks added to the “{trello_board.name}” board."), "info")
         return redirect(url_for(".dashboard"))
 
     elif list_form.errors:

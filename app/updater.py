@@ -6,7 +6,16 @@ from flask import flash, url_for, render_template
 from app import db, sparkpost
 from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum
 from app.errors import TrelloInvalidRequest, TrelloResourceMissing, GithubResourceMissing, GithubUnauthorized
-from app.models import GithubRepo, TrelloCard, TrelloList, TrelloChecklist, TrelloCheckitem, PullRequest
+from app.models import (
+    GithubRepo,
+    TrelloCard,
+    TrelloList,
+    TrelloChecklist,
+    TrelloCheckitem,
+    PullRequest,
+    ProductSignoff,
+    TrelloBoard,
+)
 from app.utils import get_github_client, get_trello_client, get_trello_cards_from_text
 
 
@@ -136,23 +145,19 @@ class Updater:
             if self.user.checklist_feature_enabled:
                 self._update_trello_checklists(pull_request)
 
-            # FIXME: Need smarter logic here to determine if the pull request needs a status check
-            # Probably need to have a TrelloBoard model.
-            count = TrelloList.query.filter(TrelloList.integration == self.user.trello_integration).count()
-            print(f"Found trello cards for user: {count}")
-            if count:
-                signed_off_count = 0
-                for trello_card in pull_request.trello_cards:
-                    trello_list = TrelloList.query.get(self.trello_client.get_card(trello_card.id).list.id)
+            signed_off_count, required_signoffs_count = 0, 0
+            for trello_card in pull_request.trello_cards:
+                if TrelloBoard.query.get(trello_card.board.id):
+                    required_signoffs_count += 1
 
-                    if trello_list:
+                    if TrelloList.query.get(trello_card.list.id):
                         signed_off_count += 1
 
-                total_required_count = len(pull_request.trello_cards)
-                if signed_off_count < total_required_count:
-                    self._set_pull_request_status(pull_request, StatusEnum.PENDING.value)
-                else:
-                    self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
+            total_required_count = len(pull_request.trello_cards)
+            if signed_off_count < total_required_count:
+                self._set_pull_request_status(pull_request, StatusEnum.PENDING.value)
+            else:
+                self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
 
     def sync_repositories(self, chosen_repo_ids):
         print(chosen_repo_ids)

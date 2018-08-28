@@ -6,7 +6,7 @@
   <div class="govuk-grid-column-two-thirds">
     <h1 class="govuk-heading-xl">Delete check</h1>
     <div class="govuk-body">
-      If you no longer need product sign-off checks for the ‘<span class="govuk-!-font-weight-bold">{{ trello_board.name }}</span>’ board, you can delete it. This action will take effect immediately.
+      If you no longer need product sign-off checks for the ‘<span class="govuk-!-font-weight-bold">{{ product_signoff.trello_board.name }}</span>’ board, you can delete it. This action will take effect immediately.
     </div>
     <form method="POST" data-module="disable-on-submit disable-permanently">
       {{ delete_product_signoff_form.csrf_token }}

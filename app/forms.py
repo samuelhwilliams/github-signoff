@@ -63,7 +63,7 @@ class ChooseTrelloBoardForm(FlaskForm):
         if boards is None:
             boards = []
 
-        self.board_choice.choices = [(board.board_id, board.name) for board in boards]
+        self.board_choice.choices = [(board.id, board.name) for board in boards]
 
 
 class ChooseTrelloListForm(FlaskForm):

@@ -65,8 +65,8 @@
             {% if github_status == "valid" and trello_status == "valid" and github_repos|length > 0 %}
             <a class="govuk-link" href="{{ url_for('.trello_product_signoff') }}">Product sign-off checks</a>
             
-              {% if trello_lists|length > 0 %}
-              <strong class="govuk-tag app-task-list__task-state">{% if trello_lists|length == 1 %}{{ trello_lists|length }} board{% else %}{{ trello_lists|length }} boards{% endif %}</strong>
+              {% if product_signoffs|length > 0 %}
+              <strong class="govuk-tag app-task-list__task-state">{% if product_signoffs|length == 1 %}{{ product_signoffs|length }} board{% else %}{{ product_signoffs|length }} boards{% endif %}</strong>
               {% else %}
               <strong class="govuk-tag app-tag--inactive app-task-list__task-state">not active</strong>
               {% endif %}

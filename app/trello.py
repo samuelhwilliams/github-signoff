@@ -72,9 +72,12 @@ class TrelloClient:
 
         return TrelloBoard.from_json(data)
 
-    def get_boards(self, with_lists=False):
+    def get_boards(self, with_lists=False, as_json=False):
         params = {"lists": "all"} if with_lists else {}
         boards = self._get(f"/members/me/boards", params=params).json()
+        
+        if as_json:
+            return boards
 
         return [TrelloBoard.from_json(board_data) for board_data in boards]
 

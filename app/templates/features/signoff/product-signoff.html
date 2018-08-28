@@ -23,7 +23,7 @@
     </details>
     
     <h2 class="govuk-heading-l">Existing checks</h2>
-    {% if trello_boards_and_lists|length > 0 %}
+    {% if existing_product_signoff_checks|length > 0 %}
       <table class="govuk-table">
         <caption class="govuk-table__caption govuk-!-font-weight-regular">Trello boards with existing sign-off checks:</caption>
         <thead class="govuk-table__head">
@@ -33,14 +33,14 @@
           </tr>
         </thead>
         <tbody class="govuk-table__body">
-          {% for trello_board, trello_list in trello_boards_and_lists.items() %}
+          {% for product_signoff in existing_product_signoff_checks %}
           <tr class="govuk-table__row">
-            <th class="govuk-table__cell">{{ trello_board.name }}</th>
+            <th class="govuk-table__cell">{{ product_signoff.trello_board.name }}</th>
             <td class="govuk-table__cell govuk-table__header--numeric" scope="col">
-              {% if trello_list.integration != current_user.trello_integration %}
+              {% if product_signoff.user != current_user %}
               Connected by another user
               {% else %}
-              <a class="govuk-link" href="{{ url_for('.trello_manage_product_signoff', board_id=trello_board.board_id) }}">Manage</a>
+              <a class="govuk-link" href="{{ url_for('.trello_manage_product_signoff', signoff_id=product_signoff.id) }}">Manage</a>
               {% endif %}
             </td>
           </tr>

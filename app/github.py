@@ -18,26 +18,32 @@ class GithubClient:
         self.user = user
         self._token = self.user.github_integration.oauth_token
 
-    def _default_params(self):
-        return {"access_token": self._token}
+    def _default_headers(self, use_basic_auth=False):
+        default_headers = {"Accept": "application/vnd.github.v3+json"}
 
-    def _default_headers(self):
-        return {"Accept": "application/vnd.github.v3+json"}
+        if not use_basic_auth:
+            default_headers["Authorization"] = f"Bearer {self._token}"
+
+        return default_headers
+
+    def _default_auth(self, use_basic_auth=False):
+        return (self.client_id, self.client_secret) if use_basic_auth else tuple()
 
     def _request(self, method, path, params=None, json=None, use_basic_auth=False):
         if params is None:
             params = {}
 
-        params = {**self._default_params(), **params}
+        if not path.startswith(self.GITHUB_API_ROOT):
+            path = self.GITHUB_API_ROOT + path
 
         current_app.logger.debug(f"Request settings: {method}, {path}, {params}")
         response = requests.request(
             method=method,
-            url=f"{GithubClient.GITHUB_API_ROOT}{path}",
+            url=path,
             params=params,
             json=json,
-            headers=self._default_headers(),
-            auth=(self.client_id, self.client_secret) if use_basic_auth else tuple(),
+            headers=self._default_headers(use_basic_auth=use_basic_auth),
+            auth=self._default_auth(use_basic_auth=use_basic_auth),
         )
         current_app.logger.debug(f"Response: {response.status_code}, {response.text}")
 
@@ -56,10 +62,16 @@ class GithubClient:
         return self._request("delete", *args, **kwargs)
 
     def get_repos(self):
-        data = self._get(f"/user/repos").json()
+        response = self._get(f"/user/repos")
+        all_repos = [GithubRepo.from_json(data=repo) for repo in response.json() if repo["permissions"]["admin"]]
 
-        repos = [GithubRepo.from_json(data=repo_data) for repo_data in data if repo_data["permissions"]["admin"]]
-        return repos
+        while response.links.get("next"):
+            response = self._get(response.links["next"]["url"])
+            all_repos.extend(
+                [GithubRepo.from_json(data=repo) for repo in response.json() if repo["permissions"]["admin"]]
+            )
+
+        return all_repos
 
     def get_repo(self, repo_id, as_json=False):
         data = self._get(f"/repositories/{repo_id}").json()

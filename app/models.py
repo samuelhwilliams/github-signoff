@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import random
 
 from flask import current_app
 from sqlalchemy.orm import backref
@@ -7,10 +8,19 @@ from app import db
 from app.constants import StatusEnum
 
 
+def random_external_id():
+    return random.SystemRandom().randint(10 ** 14, (10 ** 15) - 1)
+
+
 class LoginToken(db.Model):
     __tablename__ = "login_token"
     guid = db.Column(db.Text, primary_key=True)  # TODO:  should change this to a binary/native uuid type
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id", name="fk_login_token_user_id", ondelete="cascade"), index=True, nullable=False)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", name="fk_login_token_user_id", ondelete="cascade"),
+        index=True,
+        nullable=False,
+    )
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.utcnow() + timedelta(minutes=5))
     consumed_at = db.Column(db.DateTime, nullable=True)  # either by logging in or creating a second token
@@ -56,14 +66,16 @@ class User(db.Model):
 
 
 class GithubIntegration(db.Model):
-    user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_github_integration_user_id", ondelete="cascade"), primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey(User.id, name="fk_github_integration_user_id", ondelete="cascade"), primary_key=True
+    )
 
     # The intermediate oauth2 state used to securely generate the oauth_token.
     oauth_state = db.Column(db.Text, nullable=False)
 
     # The user's oauth token to interact with the GitHub API.
     oauth_token = db.Column(db.Text, nullable=True)
-    
+
     # MATERIALIZE RELATIONSHIPS
     user = db.relationship(
         User, lazy="joined", backref=backref("github_integration", cascade="all, delete-orphan", uselist=False)
@@ -71,11 +83,13 @@ class GithubIntegration(db.Model):
 
 
 class TrelloIntegration(db.Model):
-    user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_trello_integration_user_id", ondelete="cascade"), primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey(User.id, name="fk_trello_integration_user_id", ondelete="cascade"), primary_key=True
+    )
 
     # The user's oauth token to interact with the Trello API.
     oauth_token = db.Column(db.Text, nullable=False)
-    
+
     # MATERIALIZE RELATIONSHIPS
     trello_integration = db.relationship(
         User, lazy="joined", backref=backref("trello_integration", cascade="all, delete-orphan", uselist=False)
@@ -113,6 +127,9 @@ class GithubRepo(db.Model):
     integration = db.relationship(
         GithubIntegration, lazy="joined", backref=backref("github_repos", cascade="all, delete-orphan")
     )
+    
+    def __repr__(self):
+        return f"<GitHubRepo(id={self.id}, fullname={self.fullname})>"
 
     @classmethod
     def from_json(cls, data):
@@ -149,7 +166,9 @@ class PullRequest(db.Model):
 
     # DECLARE RELATIONSHIPS
     repo_id = db.Column(
-        db.Integer, db.ForeignKey(GithubRepo.id, name="fk_pull_request_github_repo_id", ondelete="cascade"), nullable=False
+        db.Integer,
+        db.ForeignKey(GithubRepo.id, name="fk_pull_request_github_repo_id", ondelete="cascade"),
+        nullable=False,
     )
 
     # MATERIALIZE RELATIONSHIPS
@@ -189,10 +208,12 @@ class PullRequest(db.Model):
         return self
 
 
-class TrelloBoard:
+class TrelloBoard(db.Model):
     """
     Converts a JSON data blob from the Trello API in a Python object representing a Trello Board.
     """
+
+    id = db.Column(db.Text, primary_key=True)
 
     @classmethod
     def from_json(cls, data):
@@ -207,14 +228,17 @@ class TrelloBoard:
             raise ValueError("Must provide either a Trello client or an existing json data blob")
 
         if not data:
-            data = trello_client.get_board(self.board_id, as_json=True)
+            data = trello_client.get_board(self.id, as_json=True)
+            
+        # Core model fields
+        self.id = data["id"]
 
         # Additional fields hydrated from the Trello API - not persisted or available otherwise.
-        self.board_id = data["id"]
         self.name = data["name"]
-        
+
         if "lists" in data:
             self.lists = [TrelloList.from_json(list_data) for list_data in data["lists"]]
+            self.lists_by_id = {list_.id: list_ for list_ in self.lists}
 
         return self
 
@@ -228,19 +252,6 @@ class TrelloList(db.Model):
 
     # Records the Trello ID associated with the hook we create.
     hook_id = db.Column(db.Text, nullable=True)
-
-    # DECLARE RELATIONSHIPS
-    integration_id = db.Column(
-        db.Integer,
-        db.ForeignKey(TrelloIntegration.user_id, name="fk_trello_list_trello_integration_user_id", ondelete="cascade"),
-        index=False,
-        nullable=False,
-    )
-
-    # MATERIALIZE RELATIONSHIPS
-    integration = db.relationship(
-        TrelloIntegration, lazy="joined", backref=backref("trello_lists", cascade="all, delete-orphan")
-    )
 
     @classmethod
     def from_json(cls, data):
@@ -258,7 +269,7 @@ class TrelloList(db.Model):
 
         # Core model fields
         self.id = data["id"]
-        
+
         # Additional fields hydrated from the Trello API - not persisted or available otherwise.
         self.name = data["name"]
         self.board_id = data["idBoard"]
@@ -266,22 +277,57 @@ class TrelloList(db.Model):
         return self
 
 
+class ProductSignoff(db.Model):
+    __tablename__ = "product_signoff"
+    
+    id = db.Column(db.BigInteger, primary_key=True, default=random_external_id)
+
+    user_id = db.Column(
+        db.Integer, db.ForeignKey(User.id, name="fk_product_signoff_user_id", ondelete="cascade"), index=True
+    )
+
+    trello_board_id = db.Column(
+        db.Text, db.ForeignKey(TrelloBoard.id, name="fk_product_signoff_trello_board_id", ondelete="cascade"), index=True, nullable=False, unique=True
+    )
+    trello_list_id = db.Column(
+        db.Text, db.ForeignKey(TrelloList.id, name="fk_product_signoff_trello_list_id", ondelete="cascade"), index=True, nullable=False, unique=True
+    )
+
+    user = db.relationship(User, lazy="joined", backref=backref("product_signoffs", cascade="all, delete-orphan"))
+    trello_board = db.relationship(TrelloBoard, lazy="joined", backref=backref("product_signoff", uselist=False), cascade="all, delete-orphan", single_parent=True)
+    trello_list = db.relationship(TrelloList, lazy="joined", backref=backref("product_signoff", uselist=False), cascade="all, delete-orphan", single_parent=True)
+
+    __table_args__ = (db.UniqueConstraint(trello_board_id, trello_list_id, name="uix_trello_board_id_trello_list_id"),)
+    
+    def hydrate(self, trello_client, trello_board_data=None, trello_list_data=None):
+        self.trello_board.hydrate(trello_client=trello_client, data=trello_board_data)
+        self.trello_list.hydrate(trello_client=trello_client, data=trello_list_data)
+    
+    def hydrate_from_board_json(self, board_json):
+        board_json = {**board_json}
+        lists_json = board_json.pop("lists", [])
+        self.trello_board.hydrate(data=board_json)
+        
+        for list_json in lists_json:
+            if list_json["id"] == self.trello_list.id:
+                self.trello_list.hydrate(data=list_json)
+
+
 class PullRequestTrelloCard(db.Model):
     """Join table for many-to-many relationship of PullRequest and TrelloCard"""
+
     __tablename__ = "pull_request_trello_card"
     card_id = db.Column(
         db.Text, db.ForeignKey("trello_card.id", name="fk_pull_request_trello_card_card_id"), primary_key=True
     )
     pull_request_id = db.Column(
-        db.Integer,
-        db.ForeignKey(PullRequest.id, name="fk_pull_request_trello_card_pull_request_id"),
-        primary_key=True,
+        db.Integer, db.ForeignKey(PullRequest.id, name="fk_pull_request_trello_card_pull_request_id"), primary_key=True
     )
 
 
 class TrelloCard(db.Model):
     __tablename__ = "trello_card"
-    
+
     # Non-sequential text-based PK matching Trello's internal ID for the card.
     id = db.Column(db.Text, primary_key=True)
 
@@ -325,13 +371,16 @@ class TrelloCard(db.Model):
 
 class TrelloChecklist(db.Model):
     __tablename__ = "trello_checklist"
-    
+
     # Non-sequential text-based PK matching Trello's internal ID for the checklist.
     id = db.Column(db.Text, primary_key=True)
-    
+
     # DECLARE RELATIONSHIPS
     card_id = db.Column(
-        db.Text, db.ForeignKey(TrelloCard.id, name="fk_trello_checklist_trello_card_id", ondelete="cascade"), unique=True, nullable=False
+        db.Text,
+        db.ForeignKey(TrelloCard.id, name="fk_trello_checklist_trello_card_id", ondelete="cascade"),
+        unique=True,
+        nullable=False,
     )
 
     # MATERIALIZE RELATIONSHIPS
@@ -361,10 +410,10 @@ class TrelloChecklist(db.Model):
 
 class TrelloCheckitem(db.Model):
     __tablename__ = "trello_checkitem"
-    
+
     # Non-sequential text-based PK matching Trello's internal ID for the checkitem.
     id = db.Column(db.Text, primary_key=True)
-    
+
     # DECLARE RELATIONSHIPS
     checklist_id = db.Column(
         db.Text,
@@ -400,9 +449,7 @@ class TrelloCheckitem(db.Model):
             raise ValueError("Must provide either a Trello client or an existing json data blob")
 
         if not data:
-            data = trello_client.get_checkitem(
-                checklist_id=self.checklist_id, checkitem_id=self.id, as_json=True
-            )
+            data = trello_client.get_checkitem(checklist_id=self.checklist_id, checkitem_id=self.id, as_json=True)
 
         self.id = data["id"]
         self.checklist_id = data["idChecklist"]
