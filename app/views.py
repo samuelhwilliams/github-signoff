@@ -467,7 +467,7 @@ def trello_callback():
         
     if data.get("action", {}).get("type") == "updateCard":
         trello_card = TrelloCard.from_json(data["action"]["data"]["card"])
-        current_app.logger.debug(f"updateCard on {trello_card}: {trello_card.id}")
+        current_app.logger.debug(f"updateCard on {trello_card}")
         if trello_card and trello_card.pull_requests:
             updater = Updater(current_app, db, trello_card.pull_requests[0].repo.integration.user)
             updater.sync_trello_card(trello_card)
