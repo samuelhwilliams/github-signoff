@@ -10,7 +10,7 @@ from app.constants import StatusEnum
 class LoginToken(db.Model):
     __tablename__ = "login_token"
     guid = db.Column(db.Text, primary_key=True)  # TODO:  should change this to a binary/native uuid type
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id", name="fk_login_token_user_id"), index=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", name="fk_login_token_user_id", ondelete="cascade"), index=True, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.utcnow() + timedelta(minutes=5))
     consumed_at = db.Column(db.DateTime, nullable=True)  # either by logging in or creating a second token
@@ -56,7 +56,7 @@ class User(db.Model):
 
 
 class GithubIntegration(db.Model):
-    user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_github_integration_user_id"), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_github_integration_user_id", ondelete="cascade"), primary_key=True)
 
     # The intermediate oauth2 state used to securely generate the oauth_token.
     oauth_state = db.Column(db.Text, nullable=False)
@@ -71,7 +71,7 @@ class GithubIntegration(db.Model):
 
 
 class TrelloIntegration(db.Model):
-    user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_trello_integration_user_id"), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey(User.id, name="fk_trello_integration_user_id", ondelete="cascade"), primary_key=True)
 
     # The user's oauth token to interact with the Trello API.
     oauth_token = db.Column(db.Text, nullable=False)
@@ -149,7 +149,7 @@ class PullRequest(db.Model):
 
     # DECLARE RELATIONSHIPS
     repo_id = db.Column(
-        db.Integer, db.ForeignKey(GithubRepo.id, name="fk_pull_request_github_repo_id"), nullable=False
+        db.Integer, db.ForeignKey(GithubRepo.id, name="fk_pull_request_github_repo_id", ondelete="cascade"), nullable=False
     )
 
     # MATERIALIZE RELATIONSHIPS
@@ -232,7 +232,7 @@ class TrelloList(db.Model):
     # DECLARE RELATIONSHIPS
     integration_id = db.Column(
         db.Integer,
-        db.ForeignKey(TrelloIntegration.user_id, name="fk_trello_list_trello_integration_user_id"),
+        db.ForeignKey(TrelloIntegration.user_id, name="fk_trello_list_trello_integration_user_id", ondelete="cascade"),
         index=False,
         nullable=False,
     )
@@ -331,7 +331,7 @@ class TrelloChecklist(db.Model):
     
     # DECLARE RELATIONSHIPS
     card_id = db.Column(
-        db.Text, db.ForeignKey(TrelloCard.id, name="fk_trello_checklist_trello_card_id"), unique=True, nullable=False
+        db.Text, db.ForeignKey(TrelloCard.id, name="fk_trello_checklist_trello_card_id", ondelete="cascade"), unique=True, nullable=False
     )
 
     # MATERIALIZE RELATIONSHIPS
@@ -368,13 +368,13 @@ class TrelloCheckitem(db.Model):
     # DECLARE RELATIONSHIPS
     checklist_id = db.Column(
         db.Text,
-        db.ForeignKey(TrelloChecklist.id, name="fk_trello_checkitem_trello_checklist_id"),
+        db.ForeignKey(TrelloChecklist.id, name="fk_trello_checkitem_trello_checklist_id", ondelete="cascade"),
         db.UniqueConstraint(name="uix_id"),
         nullable=False,
     )
     pull_request_id = db.Column(
         db.Integer,
-        db.ForeignKey(PullRequest.id, name="fk_trello_checkitem_pull_request_id"),
+        db.ForeignKey(PullRequest.id, name="fk_trello_checkitem_pull_request_id", ondelete="cascade"),
         nullable=False,
     )
 
