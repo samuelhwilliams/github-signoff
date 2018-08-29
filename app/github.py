@@ -18,6 +18,9 @@ class GithubClient:
         self.user = user
         self._token = self.user.github_integration.oauth_token
 
+    def _default_params(self):
+        return {"per_page": 100}
+
     def _default_headers(self, use_basic_auth=False):
         default_headers = {"Accept": "application/vnd.github.v3+json"}
 
@@ -32,6 +35,8 @@ class GithubClient:
     def _request(self, method, path, params=None, json=None, use_basic_auth=False):
         if params is None:
             params = {}
+
+        params = {**self._default_params(), **params}
 
         if not path.startswith(self.GITHUB_API_ROOT):
             path = self.GITHUB_API_ROOT + path
