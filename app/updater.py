@@ -4,7 +4,7 @@ from secrets import token_urlsafe
 from flask import flash, url_for, render_template
 
 from app import db, sparkpost
-from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum
+from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum, TICKETS_REMOVED_FROM_CARD
 from app.errors import TrelloInvalidRequest, TrelloResourceMissing, GithubResourceMissing, GithubUnauthorized
 from app.models import (
     GithubRepo,
@@ -28,7 +28,15 @@ class Updater:
         self.trello_client = get_trello_client(app, user)
 
     def _set_pull_request_status(self, pull_request, status):
-        description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
+        if pull_request.trello_cards:
+            description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
+
+        elif status == StatusEnum.SUCCESS.value:
+            description = TICKETS_REMOVED_FROM_CARD
+
+        else:
+            description = "Unknown status"
+
         response = self.github_client.set_pull_request_status(
             statuses_url=pull_request.statuses_url,
             status=status,
@@ -41,7 +49,7 @@ class Updater:
 
     def _update_tracked_trello_cards(self, pull_request, new_trello_cards):
         self.app.logger.debug(f"Existing cards: {pull_request.trello_cards}")
-        
+
         new_trello_card_ids = {card.id for card in new_trello_cards}
 
         for trello_card in pull_request.trello_cards:
@@ -58,7 +66,7 @@ class Updater:
                         )
 
                 db.session.delete(trello_card)
-        
+
         pull_request.trello_cards = new_trello_cards
 
         db.session.add(pull_request)
@@ -136,7 +144,7 @@ class Updater:
 
         db.session.commit()
 
-    def _update_pull_request_status(self, pull_request):
+    def _update_pull_request_status(self, pull_request, before_update_pr_card_count):
         self.app.logger.debug(f"Updating for {pull_request}")
         if pull_request.trello_cards:
             signed_off_count, required_signoffs_count = 0, 0
@@ -155,12 +163,17 @@ class Updater:
             else:
                 self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
 
+        elif before_update_pr_card_count > 0:
+            self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
+
     def sync_pull_request(self, data):
         pull_request = PullRequest.from_json(data=data)
         trello_cards = get_trello_cards_from_text(trello_client=self.trello_client, text=pull_request.body)
 
+        before_update_pr_card_count = len(pull_request.trello_cards)
+
         self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
-        self._update_pull_request_status(pull_request)
+        self._update_pull_request_status(pull_request, before_update_pr_card_count=before_update_pr_card_count)
 
         if self.user.checklist_feature_enabled:
             self._update_trello_checklists(pull_request)
