@@ -258,4 +258,4 @@ class Updater:
 
         for pull_request in trello_card.pull_requests:
             pull_request.hydrate(github_client=self.github_client)
-            self._update_pull_request_status(pull_request)
+            self._update_pull_request_status(pull_request, before_update_pr_card_count=len(pull_request.trello_cards))
