@@ -4,6 +4,7 @@ import enum
 AWAITING_PRODUCT_REVIEW = "Awaiting product signoff"
 TICKET_APPROVED_BY = "Product signoff has been received"
 TICKETS_REMOVED_FROM_CARD = "Trello card links removed from PR"
+TICKET_SIGNOFF_NOT_REQUIRED = "Product signoff not required"
 
 
 class StatusEnum(enum.Enum):

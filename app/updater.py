@@ -1,10 +1,17 @@
 import uuid
 from secrets import token_urlsafe
+from typing import Union
 
 from flask import flash, url_for, render_template
 
 from app import db, sparkpost
-from app.constants import AWAITING_PRODUCT_REVIEW, TICKET_APPROVED_BY, StatusEnum, TICKETS_REMOVED_FROM_CARD
+from app.constants import (
+    AWAITING_PRODUCT_REVIEW,
+    TICKET_APPROVED_BY,
+    TICKETS_REMOVED_FROM_CARD,
+    TICKET_SIGNOFF_NOT_REQUIRED,
+    StatusEnum,
+)
 from app.errors import TrelloInvalidRequest, TrelloResourceMissing, GithubResourceMissing, GithubUnauthorized
 from app.models import (
     GithubRepo,
@@ -27,9 +34,13 @@ class Updater:
         self.github_client = get_github_client(app, user)
         self.trello_client = get_trello_client(app, user)
 
-    def _set_pull_request_status(self, pull_request, status):
+    def _set_pull_request_status(self, pull_request: PullRequest, status: str, required: Union[bool, int] = False):
         if pull_request.trello_cards:
-            description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
+            if required:
+                description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
+
+            else:
+                description = TICKET_SIGNOFF_NOT_REQUIRED
 
         elif status == StatusEnum.SUCCESS.value:
             description = TICKETS_REMOVED_FROM_CARD
@@ -159,9 +170,9 @@ class Updater:
 
             self.app.logger.debug(f"Required: {required_signoffs_count}, actual: {signed_off_count}")
             if signed_off_count < required_signoffs_count:
-                self._set_pull_request_status(pull_request, StatusEnum.PENDING.value)
+                self._set_pull_request_status(pull_request, StatusEnum.PENDING.value, required=required_signoffs_count)
             else:
-                self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
+                self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value, required=required_signoffs_count)
 
         elif before_update_pr_card_count > 0:
             self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
