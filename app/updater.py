@@ -35,6 +35,7 @@ class Updater:
         self.trello_client = get_trello_client(app, user)
 
     def _set_pull_request_status(self, pull_request: PullRequest, status: str, required: Union[bool, int] = False):
+        self.app.logger.debug(f"Updating pull request status: {pull_request}, {status}, {required}")
         if pull_request.trello_cards:
             if required:
                 description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
@@ -178,10 +179,14 @@ class Updater:
             self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
 
     def sync_pull_request(self, data):
+        self.app.logger.debug(f"Incoming pull request: {data}")
         pull_request = PullRequest.from_json(data=data)
+        self.app.logger.debug(f"Pull request: {pull_request}")
         trello_cards = get_trello_cards_from_text(trello_client=self.trello_client, text=pull_request.body)
+        self.app.logger.debug(f"Trello cards: {trello_cards}")
 
         before_update_pr_card_count = len(pull_request.trello_cards)
+        self.app.logger.debug(f"before_update_pr_card_count: {before_update_pr_card_count}")
 
         self._update_tracked_trello_cards(pull_request=pull_request, new_trello_cards=trello_cards)
         self._update_pull_request_status(pull_request, before_update_pr_card_count=before_update_pr_card_count)
