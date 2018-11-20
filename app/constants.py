@@ -17,3 +17,4 @@ class StatusEnum(enum.Enum):
 
     PENDING = "pending"
     SUCCESS = "success"
+    UNNECESSARY = "unnecessary"

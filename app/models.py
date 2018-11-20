@@ -127,7 +127,7 @@ class GithubRepo(db.Model):
     integration = db.relationship(
         GithubIntegration, lazy="joined", backref=backref("github_repos", cascade="all, delete-orphan")
     )
-    
+
     def __repr__(self):
         return f"<GitHubRepo(id={self.id}, fullname={self.fullname})>"
 
@@ -229,7 +229,7 @@ class TrelloBoard(db.Model):
 
         if not data:
             data = trello_client.get_board(self.id, as_json=True)
-            
+
         # Core model fields
         self.id = data["id"]
 
@@ -279,7 +279,7 @@ class TrelloList(db.Model):
 
 class ProductSignoff(db.Model):
     __tablename__ = "product_signoff"
-    
+
     id = db.Column(db.BigInteger, primary_key=True, default=random_external_id)
 
     user_id = db.Column(
@@ -287,27 +287,47 @@ class ProductSignoff(db.Model):
     )
 
     trello_board_id = db.Column(
-        db.Text, db.ForeignKey(TrelloBoard.id, name="fk_product_signoff_trello_board_id", ondelete="cascade"), index=True, nullable=False, unique=True
+        db.Text,
+        db.ForeignKey(TrelloBoard.id, name="fk_product_signoff_trello_board_id", ondelete="cascade"),
+        index=True,
+        nullable=False,
+        unique=True,
     )
     trello_list_id = db.Column(
-        db.Text, db.ForeignKey(TrelloList.id, name="fk_product_signoff_trello_list_id", ondelete="cascade"), index=True, nullable=False, unique=True
+        db.Text,
+        db.ForeignKey(TrelloList.id, name="fk_product_signoff_trello_list_id", ondelete="cascade"),
+        index=True,
+        nullable=False,
+        unique=True,
     )
 
     user = db.relationship(User, lazy="joined", backref=backref("product_signoffs", cascade="all, delete-orphan"))
-    trello_board = db.relationship(TrelloBoard, lazy="joined", backref=backref("product_signoff", uselist=False), cascade="all, delete-orphan", single_parent=True)
-    trello_list = db.relationship(TrelloList, lazy="joined", backref=backref("product_signoff", uselist=False), cascade="all, delete-orphan", single_parent=True)
+    trello_board = db.relationship(
+        TrelloBoard,
+        lazy="joined",
+        backref=backref("product_signoff", uselist=False),
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
+    trello_list = db.relationship(
+        TrelloList,
+        lazy="joined",
+        backref=backref("product_signoff", uselist=False),
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )
 
     __table_args__ = (db.UniqueConstraint(trello_board_id, trello_list_id, name="uix_trello_board_id_trello_list_id"),)
-    
+
     def hydrate(self, trello_client, trello_board_data=None, trello_list_data=None):
         self.trello_board.hydrate(trello_client=trello_client, data=trello_board_data)
         self.trello_list.hydrate(trello_client=trello_client, data=trello_list_data)
-    
+
     def hydrate_from_board_json(self, board_json):
         board_json = {**board_json}
         lists_json = board_json.pop("lists", [])
         self.trello_board.hydrate(data=board_json)
-        
+
         for list_json in lists_json:
             if list_json["id"] == self.trello_list.id:
                 self.trello_list.hydrate(data=list_json)

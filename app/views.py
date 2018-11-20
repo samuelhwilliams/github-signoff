@@ -110,7 +110,7 @@ def redirect_authenticated_user_to_dashboard(func):
     def wrapper(*args, **kwargs):
         if current_user.is_authenticated:
             return redirect(url_for(".dashboard"))
-        
+
         return func(*args, **kwargs)
 
     return wrapper
@@ -199,15 +199,15 @@ def dashboard():
         if github_status == "valid"
         else []
     )
-    
+
     product_signoffs = []
     if trello_status == "valid":
         trello_client = get_trello_client(current_app, current_user)
         trello_board_ids = [board.id for board in trello_client.get_boards()]
 
-        product_signoffs = (
-            ProductSignoff.query.filter(ProductSignoff.trello_board.has(TrelloBoard.id.in_(trello_board_ids))).all()
-        )
+        product_signoffs = ProductSignoff.query.filter(
+            ProductSignoff.trello_board.has(TrelloBoard.id.in_(trello_board_ids))
+        ).all()
 
     return render_template(
         "dashboard.html",
@@ -471,17 +471,17 @@ def integrate_trello_head():
 @main_blueprint.route("/trello/integration", methods=["POST"])
 def trello_callback():
     data = json.loads(request.get_data(as_text=True))
-    
+
     if current_app.config["DEBUG_PAYLOADS"]:
         current_app.logger.debug(f"Incoming trello payload: {data}")
-        
+
     if data.get("action", {}).get("type") == "updateCard":
         trello_card = TrelloCard.from_json(data["action"]["data"]["card"])
         current_app.logger.debug(f"updateCard on {trello_card}")
         if trello_card and trello_card.pull_requests:
             updater = Updater(current_app, db, trello_card.pull_requests[0].repo.integration.user)
             updater.sync_trello_card(trello_card)
-        
+
     else:
         current_app.logger.debug("Ignoring payload: not an `updateCard`")
 
@@ -581,13 +581,12 @@ def get_board_name(*args, **kwargs):
 
 @main_blueprint.route("/trello/product-signoff/<signoff_id>")
 @register_breadcrumb(
-    main_blueprint, ".trello_product_signoff.trello_manage_product_signoff", "", dynamic_list_constructor=get_board_name)
+    main_blueprint, ".trello_product_signoff.trello_manage_product_signoff", "", dynamic_list_constructor=get_board_name
+)
 @login_required
 def trello_manage_product_signoff(signoff_id):
     trello_client = get_trello_client(current_app, current_user)
-    product_signoff = ProductSignoff.query.filter(
-        ProductSignoff.id == signoff_id
-    ).one_or_none()
+    product_signoff = ProductSignoff.query.filter(ProductSignoff.id == signoff_id).one_or_none()
     if not product_signoff:
         flash("No such board")
         return redirect(url_for(".trello_product_signoff")), 404
@@ -611,9 +610,7 @@ def trello_delete_signoff_check(signoff_id):
 
     trello_client = get_trello_client(current_app, current_user)
 
-    product_signoff = ProductSignoff.query.filter(
-        ProductSignoff.id == signoff_id
-    ).one_or_none()
+    product_signoff = ProductSignoff.query.filter(ProductSignoff.id == signoff_id).one_or_none()
     if not product_signoff:
         flash("No such product signoff")
         return redirect(url_for(".trello_product_signoff")), 404
@@ -700,8 +697,7 @@ def trello_choose_list():
         list_id = list_form.list_choice.data
         try:
             trello_hook = trello_client.create_webhook(
-                object_id=list_id,
-                callback_url=url_for(".trello_callback", _external=True),
+                object_id=list_id, callback_url=url_for(".trello_callback", _external=True)
             )
 
         except HookAlreadyExists:

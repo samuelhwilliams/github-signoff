@@ -34,24 +34,30 @@ class Updater:
         self.github_client = get_github_client(app, user)
         self.trello_client = get_trello_client(app, user)
 
-    def _set_pull_request_status(self, pull_request: PullRequest, status: str, required: Union[bool, int] = False):
+    def _set_pull_request_status(
+        self, pull_request: PullRequest, status: StatusEnum, required: Union[bool, int] = False
+    ):
         self.app.logger.debug(f"Updating pull request status: {pull_request}, {status}, {required}")
         if pull_request.trello_cards:
             if required:
-                description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS.value else AWAITING_PRODUCT_REVIEW
+                description = TICKET_APPROVED_BY if status == StatusEnum.SUCCESS else AWAITING_PRODUCT_REVIEW
 
             else:
                 description = TICKET_SIGNOFF_NOT_REQUIRED
 
-        elif status == StatusEnum.SUCCESS.value:
+        elif status == StatusEnum.SUCCESS:
             description = TICKETS_REMOVED_FROM_CARD
+
+        elif status == StatusEnum.UNNECESSARY:
+            status = StatusEnum.SUCCESS  # Github can only handle 'pending'/'approved' - go hacks, go
+            description = TICKET_SIGNOFF_NOT_REQUIRED
 
         else:
             description = "Unknown status"
 
         response = self.github_client.set_pull_request_status(
             statuses_url=pull_request.statuses_url,
-            status=status,
+            status=status.value,
             description=description,
             context=self.app.config["APP_NAME"],
         )
@@ -171,12 +177,15 @@ class Updater:
 
             self.app.logger.debug(f"Required: {required_signoffs_count}, actual: {signed_off_count}")
             if signed_off_count < required_signoffs_count:
-                self._set_pull_request_status(pull_request, StatusEnum.PENDING.value, required=required_signoffs_count)
+                self._set_pull_request_status(pull_request, StatusEnum.PENDING, required=required_signoffs_count)
             else:
-                self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value, required=required_signoffs_count)
+                self._set_pull_request_status(pull_request, StatusEnum.SUCCESS, required=required_signoffs_count)
 
         elif before_update_pr_card_count > 0:
-            self._set_pull_request_status(pull_request, StatusEnum.SUCCESS.value)
+            self._set_pull_request_status(pull_request, StatusEnum.SUCCESS)
+
+        else:
+            self._set_pull_request_status(pull_request, StatusEnum.UNNECESSARY)
 
     def sync_pull_request(self, data):
         self.app.logger.debug(f"Incoming pull request: {data}")
